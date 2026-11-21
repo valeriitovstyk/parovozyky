@@ -1,0 +1,22 @@
+diff --git a/src/main.cpp b/src/main.cpp
+index c319832..d6be29e 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -11,6 +11,7 @@
+ #include "system/time.h"
+ #include "tasks/task.h"
+ #include <system/driver/driver.h>
++#include <system/driver/headless/oracle.h>
+ 
+ 
+ #include <cstdio>
+@@ -143,6 +144,9 @@ int main(int argc, char* argv[])
+             return usage(argc, argv, i);
+     }
+ 
++    // Oracle (P4): input script / trace / stop time from the environment
++    oracle::init(argc, argv);
++
+     initFS();
+ 
+     // Driver should be destroyed after scheduler => we have to initialize it first

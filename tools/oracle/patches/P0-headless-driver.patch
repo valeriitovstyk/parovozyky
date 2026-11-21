@@ -1,0 +1,3966 @@
+diff --git a/src/game/field_tile_grid_overlay.cpp b/src/game/field_tile_grid_overlay.cpp
+deleted file mode 100644
+index 24a4c21..0000000
+--- a/src/game/field_tile_grid_overlay.cpp
++++ /dev/null
+@@ -1,124 +0,0 @@
+-#include "field_tile_grid_overlay.h"
+-
+-#include "constants.h"
+-#include <graphics/vga.h>
+-#include <system/driver/driver.h>
+-#include <ui/components/draw_header.h>
+-
+-#include <SDL_blendmode.h>
+-#include <SDL_error.h>
+-#include <SDL_rect.h>
+-
+-#include <cstdlib>
+-#include <iostream>
+-
+-namespace resl {
+-
+-GridOverlay& GridOverlay::instance()
+-{
+-    static GridOverlay overlay;
+-    return overlay;
+-}
+-
+-GridOverlay::GridOverlay()
+-{
+-    Driver::instance().vga().addOverlay(
+-        [this](SDL_Renderer* r, int yOffset) {
+-            draw(r, yOffset);
+-        });
+-}
+-
+-GridOverlay::~GridOverlay()
+-{
+-    if (m_texture)
+-        SDL_DestroyTexture(m_texture);
+-}
+-
+-SDL_Texture* GridOverlay::texture(SDL_Renderer* renderer)
+-{
+-    if (!m_texture) {
+-        m_texture = SDL_CreateTexture(renderer,
+-                                      Driver::instance().vga().preferredPixelFormat(),
+-                                      SDL_TEXTUREACCESS_TARGET, LOGICAL_SCREEN_WIDTH, LOGICAL_SCREEN_HEIGHT);
+-        if (!m_texture) [[unlikely]] {
+-            std::cerr << "Unable to create a texture. SDL error: "
+-                      << SDL_GetError() << std::endl;
+-            std::abort();
+-        }
+-        if (SDL_SetTextureBlendMode(m_texture, SDL_BLENDMODE_BLEND)) [[unlikely]] {
+-            std::cerr << "SDL_SetTextureBlendMode failed. "
+-                      << SDL_GetError() << std::endl;
+-            std::abort();
+-        }
+-
+-        SDL_Texture* oldTarget = SDL_GetRenderTarget(renderer);
+-        if (SDL_SetRenderTarget(renderer, m_texture)) [[unlikely]] {
+-            std::cerr << "SDL_SetRenderTarget failed. "
+-                      << SDL_GetError() << std::endl;
+-            std::abort();
+-        }
+-
+-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+-        SDL_RenderClear(renderer);
+-
+-        SDL_Rect clipRect = {
+-            10, g_headerHeight + 30,
+-            GAME_FIELD_WIDTH - 20, GAME_FIELD_HEIGHT - 40
+-        };
+-        SDL_RenderSetClipRect(renderer, &clipRect);
+-
+-        SDL_SetRenderDrawColor(renderer, 0x64, 0x8B, 0x3C, 0xFF);
+-        for (int tileX1 = 0; tileX1 < 11; ++tileX1) {
+-            const int tileX2 = tileX1;
+-            const int tileY1 = 0;
+-            const int tileY2 = 10;
+-
+-            const int x1 = (tileX1 - tileY1) * 88 + 320;
+-            const int y1 = (tileX1 + tileY1) * 21 - 22;
+-            const int x2 = (tileX2 - tileY2) * 88 + 320;
+-            const int y2 = (tileX2 + tileY2) * 21 - 22;
+-            SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+-        }
+-        for (int tileY1 = 0; tileY1 < 11; ++tileY1) {
+-            const int tileY2 = tileY1;
+-            const int tileX1 = 0;
+-            const int tileX2 = 10;
+-
+-            const int x1 = (tileX1 - tileY1) * 88 + 320;
+-            const int y1 = (tileX1 + tileY1) * 21 - 22;
+-            const int x2 = (tileX2 - tileY2) * 88 + 320;
+-            const int y2 = (tileX2 + tileY2) * 21 - 22;
+-            SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+-        }
+-        for (int tileX = 0; tileX < 11; ++tileX) {
+-            for (int tileY = 0; tileY < 11; ++tileY) {
+-                const int x = (tileX - tileY) * 88 + 320;
+-                const int y = (tileX + tileY) * 21 - 22;
+-                SDL_Rect rect = { x - 1, y - 1, 3, 3 };
+-                SDL_RenderDrawRect(renderer, &rect);
+-            }
+-        }
+-
+-        SDL_RenderSetClipRect(renderer, nullptr);
+-        if (SDL_SetRenderTarget(renderer, oldTarget)) [[unlikely]] {
+-            std::cerr << "SDL_SetRenderTarget failed. "
+-                      << SDL_GetError() << std::endl;
+-            std::abort();
+-        }
+-    }
+-    return m_texture;
+-}
+-
+-void GridOverlay::draw(SDL_Renderer* renderer, int yOffset)
+-{
+-    if (!m_active)
+-        return;
+-
+-    SDL_Rect dstRect = {
+-        0, yOffset,
+-        PHYSICAL_SCREEN_WIDTH, PHYSICAL_SCREEN_HEIGHT
+-    };
+-    SDL_RenderCopy(renderer, texture(renderer), nullptr, &dstRect);
+-}
+-
+-} // namespace resl
+diff --git a/src/game/field_tile_grid_overlay.h b/src/game/field_tile_grid_overlay.h
+index 5c0ed35..ed8ba20 100644
+--- a/src/game/field_tile_grid_overlay.h
++++ b/src/game/field_tile_grid_overlay.h
+@@ -1,25 +1,21 @@
+ #pragma once
+ 
+-#include <SDL_render.h>
+-
+ namespace resl {
+ 
++// Oracle: the grid overlay is pure presentation (an SDL texture) => stub.
+ class GridOverlay {
+ public:
+-    static GridOverlay& instance();
++    static GridOverlay& instance()
++    {
++        static GridOverlay overlay;
++        return overlay;
++    }
+ 
+     void setVisibility(bool v) { m_active = v; }
++    bool visible() const { return m_active; }
+ 
+ private:
+-    GridOverlay();
+-    ~GridOverlay();
+-    GridOverlay(const GridOverlay&) = delete;
+-    GridOverlay& operator=(const GridOverlay&) = delete;
+-
+-    void draw(SDL_Renderer*, int yOffset);
+-    SDL_Texture* texture(SDL_Renderer*);
+-
+-    SDL_Texture* m_texture = nullptr;
++    GridOverlay() = default;
+     bool m_active = false;
+ };
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index 721757e..0b9e473 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -12,7 +12,6 @@
+ #include "tasks/task.h"
+ #include <system/driver/driver.h>
+ 
+-#include <SDL_main.h>
+ 
+ #include <cstdio>
+ #include <cstdlib>
+diff --git a/src/system/driver/driver.h b/src/system/driver/driver.h
+index f2db0a9..f0a0c9e 100644
+--- a/src/system/driver/driver.h
++++ b/src/system/driver/driver.h
+@@ -1 +1,2 @@
+-#include "sdl/driver.h" // IWYU pragma: export
++// ShortLine oracle: headless driver instead of SDL (see tools/oracle/README.md)
++#include "headless/driver.h" // IWYU pragma: export
+diff --git a/src/system/driver/headless/audio.h b/src/system/driver/headless/audio.h
+new file mode 100644
+index 0000000..50dd945
+--- /dev/null
++++ b/src/system/driver/headless/audio.h
+@@ -0,0 +1,15 @@
++#pragma once
++
++#include "oracle.h"
++
++#include <cstdint>
++
++namespace resl {
++
++class AudioDriver {
++public:
++    void startSound(std::uint16_t frequency) { oracle::onSound(frequency); }
++    void stopSound() { oracle::onSound(0); }
++};
++
++} // namespace resl
+diff --git a/src/system/driver/headless/driver.cpp b/src/system/driver/headless/driver.cpp
+new file mode 100644
+index 0000000..a9a502a
+--- /dev/null
++++ b/src/system/driver/headless/driver.cpp
+@@ -0,0 +1,14 @@
++#include "driver.h"
++
++#include "oracle.h"
++
++namespace resl {
++
++void Driver::sleep(unsigned ms)
++{
++    // reSL (non-emscripten): std::this_thread::sleep_for(ms); vga().flush();
++    oracle::advanceBy(std::chrono::milliseconds(ms));
++    vga().flush();
++}
++
++} // namespace resl
+diff --git a/src/system/driver/headless/driver.h b/src/system/driver/headless/driver.h
+new file mode 100644
+index 0000000..e8177e6
+--- /dev/null
++++ b/src/system/driver/headless/driver.h
+@@ -0,0 +1,45 @@
++#pragma once
++
++#include "audio.h" // IWYU pragma: export
++#include "mouse.h" // IWYU pragma: export
++#include "oracle.h"
++#include "video.h" // IWYU pragma: export
++
++#include <system/keyboard.h>
++
++namespace resl {
++
++class Driver {
++public:
++    using VGAAdaptor = VGAEmulation;
++
++    static Driver& instance()
++    {
++        static Driver g_instance;
++        return g_instance;
++    }
++
++    VGAEmulation& vga() { return m_vga; }
++    AudioDriver& audio() { return m_audio; }
++    MouseDriver& mouse() { return m_mouse; }
++
++    void sleep(unsigned ms);
++
++    void setKeyboardHandler(KeyboardHandler hdl) { m_keyboardHandler = hdl; }
++    KeyboardHandler keyboardHandler() const { return m_keyboardHandler; }
++
++    void pollEvent() { oracle::deliverInput(); }
++
++private:
++    Driver() = default;
++    Driver(const Driver&) = delete;
++    Driver& operator=(const Driver&) = delete;
++
++    VGAEmulation m_vga;
++    AudioDriver m_audio;
++    MouseDriver m_mouse;
++
++    KeyboardHandler m_keyboardHandler = nullptr;
++};
++
++} // namespace resl
+diff --git a/src/system/driver/headless/mouse.cpp b/src/system/driver/headless/mouse.cpp
+new file mode 100644
+index 0000000..7f76158
+--- /dev/null
++++ b/src/system/driver/headless/mouse.cpp
+@@ -0,0 +1,85 @@
++#include "mouse.h"
++
++#include "driver.h"
++
++#include <graphics/vga.h>
++
++#include <algorithm>
++#include <utility>
++
++namespace resl {
++
++void MouseDriver::setPosition(int x, int y)
++{
++    // reSL issues a motion event manually here (the demo mode relies on it)
++    onMouseMove(x, y);
++}
++
++MouseDriver::HandlerHolder::HandlerHolder() noexcept
++    : m_iter(Driver::instance().mouse().m_handlers.end())
++{
++}
++
++MouseDriver::HandlerHolder::HandlerHolder(HandlerStorageT::iterator iter) noexcept
++    : m_iter(iter)
++{
++}
++
++MouseDriver::HandlerHolder::~HandlerHolder()
++{
++    if (m_iter != Driver::instance().mouse().m_handlers.end())
++        Driver::instance().mouse().m_handlers.erase(m_iter);
++}
++
++MouseDriver::HandlerHolder::HandlerHolder(HandlerHolder&& other) noexcept
++    : m_iter(Driver::instance().mouse().m_handlers.end())
++{
++    std::swap(m_iter, other.m_iter);
++}
++
++MouseDriver::HandlerHolder&
++MouseDriver::HandlerHolder::operator=(HandlerHolder&& other) noexcept
++{
++    std::swap(m_iter, other.m_iter);
++    return *this;
++}
++
++MouseDriver::HandlerHolder MouseDriver::addHandler(MouseHandler hdl)
++{
++    m_handlers.push_front(hdl);
++    return { m_handlers.begin() };
++}
++
++void MouseDriver::handle(
++    std::uint16_t flags, std::uint16_t btnState, std::int16_t x, std::int16_t y)
++{
++    if (m_handlers.empty()) [[unlikely]]
++        return;
++
++    MouseEvent e(flags, btnState, x, y);
++    for (MouseHandler& handler : m_handlers) {
++        handler(e);
++        if (!e.propagation())
++            break;
++    }
++}
++
++void MouseDriver::onMouseMove(int x, int y)
++{
++    x = std::min(x, LOGICAL_SCREEN_WIDTH);
++    y = std::min(y, LOGICAL_SCREEN_HEIGHT);
++    handle(0, m_mouseButtonState, static_cast<std::int16_t>(x), static_cast<std::int16_t>(y));
++    m_cursorX = x;
++    m_cursorY = y;
++}
++
++void MouseDriver::scriptEvent(std::uint16_t flags, std::uint16_t buttons, int x, int y)
++{
++    m_mouseButtonState = buttons;
++    if (!flags)
++        onMouseMove(x, y);
++    else
++        handle(flags, m_mouseButtonState, static_cast<std::int16_t>(x), static_cast<std::int16_t>(y));
++}
++
++} // namespace resl
+diff --git a/src/system/driver/headless/mouse.h b/src/system/driver/headless/mouse.h
+new file mode 100644
+index 0000000..67c4f70
+--- /dev/null
++++ b/src/system/driver/headless/mouse.h
+@@ -0,0 +1,73 @@
++#pragma once
++
++#include "touch_context.h" // IWYU pragma: export
++#include <system/mouse.h>
++
++#include <cstdint>
++#include <list>
++
++namespace resl {
++
++// Headless replacement of the SDL mouse driver. Mouse events come from the
++// oracle input script and are dispatched exactly like reSL dispatches SDL
++// events: handlers are called in LIFO order of registration until one of them
++// stops the propagation.
++class MouseDriver {
++    using HandlerStorageT = std::list<MouseHandler>;
++
++public:
++    class [[nodiscard]] HandlerHolder {
++    public:
++        HandlerHolder() noexcept;
++        HandlerHolder(HandlerStorageT::iterator) noexcept;
++        ~HandlerHolder();
++
++        HandlerHolder(HandlerHolder&&) noexcept;
++        HandlerHolder& operator=(HandlerHolder&&) noexcept;
++
++        HandlerHolder(const HandlerHolder&) = delete;
++        HandlerHolder& operator=(const HandlerHolder&) = delete;
++
++    private:
++        HandlerStorageT::iterator m_iter;
++    };
++
++    class [[nodiscard]] TouchContextProviderHolder {
++    public:
++        TouchContextProviderHolder() = default;
++        TouchContextProviderHolder(const TouchContextProviderHolder&) = delete;
++        TouchContextProviderHolder& operator=(const TouchContextProviderHolder&) = delete;
++    };
++
++    void setCursorVisibility(bool v) { m_cursorVisible = v; }
++    bool cursorVisible() const noexcept { return m_cursorVisible; }
++
++    int cursorX() const { return m_cursorX; }
++    int cursorY() const { return m_cursorY; }
++    void setPosition(int x, int y);
++
++    HandlerHolder addHandler(MouseHandler hdl);
++    TouchContextProviderHolder setTouchContextProvider(TouchContextProvider&) { return {}; }
++
++    bool isTouchDevice() const noexcept { return false; }
++
++    // Scripted event: the same as SDL button/motion events after conversion
++    // to logical coordinates. flags == 0 means a motion event.
++    void scriptEvent(std::uint16_t flags, std::uint16_t buttons, int x, int y);
++
++    std::uint16_t buttonState() const { return m_mouseButtonState; }
++
++private:
++    void handle(std::uint16_t flags, std::uint16_t btnState,
++                std::int16_t x, std::int16_t y);
++    void onMouseMove(int x, int y);
++
++    HandlerStorageT m_handlers;
++    std::uint16_t m_mouseButtonState = 0;
++
++    int m_cursorX = 0;
++    int m_cursorY = 0;
++    bool m_cursorVisible = false;
++};
++
++} // namespace resl
+diff --git a/src/system/driver/headless/oracle.cpp b/src/system/driver/headless/oracle.cpp
+new file mode 100644
+index 0000000..f23ad9b
+--- /dev/null
++++ b/src/system/driver/headless/oracle.cpp
+@@ -0,0 +1,292 @@
++// ShortLine oracle runtime.
++//
++// Environment:
++//   RESL_SEED       initial srand() seed (Turbo C srand takes 16 bits)
++//   RESL_SCRIPT     input script, one event per line:
++//                     <t_us> mouse <flags> <buttons> <x> <y>
++//                     <t_us> key <scancode> <down:0|1>
++//   RESL_TRACE      output trace file (text, see docs/trace-format.md)
++//   RESL_STOP_AT    virtual time in microseconds to stop at
++//   RESL_DUMP_EVERY full state dump period in microseconds (default 1000000, 0 = off)
++//   RESL_SCREENSHOT_EVERY  write <trace>.<t>.ppm screenshots with this period (us, 0 = off)
++//   RESL_CHAIN_EVERY  0 (default): one "H" line per state change;
++//                     N > 0: state changes are folded into a running chain hash
++//                     and one "C" line is written every N microseconds
++
++#include "oracle.h"
++
++#include "driver.h"
++#include "state_dump.h"
++
++#include <system/keyboard.h>
++
++#include <cassert>
++#include <cinttypes>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <string>
++#include <vector>
++
++namespace resl::oracle {
++
++namespace {
++
++    std::int64_t g_nowUs = 0;
++
++    struct InputEvent {
++        std::int64_t t;
++        bool isKey;
++        int a, b, c, d; // mouse: flags, buttons, x, y; key: scancode, down
++    };
++
++    std::vector<InputEvent> g_script;
++    std::size_t g_nextEvent = 0;
++
++    std::FILE* g_trace = nullptr;
++    std::int64_t g_stopAt = -1;
++    std::int64_t g_dumpEvery = 1000000;
++    std::int64_t g_nextDump = 0;
++    std::int64_t g_screenshotEvery = 0;
++    std::int64_t g_nextScreenshot = 0;
++    std::string g_tracePath;
++
++    std::int64_t g_chainEvery = 0;
++    std::int64_t g_nextChain = 0;
++    std::uint32_t g_chain = 2166136261u;
++    unsigned g_chainSteps = 0;
++
++    std::uint32_t fnv(std::uint32_t h, std::uint32_t v)
++    {
++        h ^= v;
++        return h * 16777619u;
++    }
++
++    std::uint32_t g_lastHash = 0;
++    bool g_haveHash = false;
++    unsigned g_resumeCount = 0;
++
++    std::int64_t envInt(const char* name, std::int64_t def)
++    {
++        const char* v = std::getenv(name);
++        if (!v || !*v)
++            return def;
++        return std::strtoll(v, nullptr, 10);
++    }
++
++    void loadScript(const char* path)
++    {
++        std::FILE* f = std::fopen(path, "r");
++        if (!f) {
++            std::fprintf(stderr, "oracle: unable to open script %s\n", path);
++            std::exit(2);
++        }
++        char line[256];
++        while (std::fgets(line, sizeof(line), f)) {
++            if (line[0] == '#' || line[0] == '\n')
++                continue;
++            InputEvent e = {};
++            char kind[16];
++            long long t = 0;
++            if (std::sscanf(line, "%lld %15s", &t, kind) != 2)
++                continue;
++            e.t = t;
++            if (!std::strcmp(kind, "mouse")) {
++                if (std::sscanf(line, "%*lld %*s %d %d %d %d", &e.a, &e.b, &e.c, &e.d) != 4) {
++                    std::fprintf(stderr, "oracle: bad script line: %s", line);
++                    std::exit(2);
++                }
++                e.isKey = false;
++            } else if (!std::strcmp(kind, "key")) {
++                if (std::sscanf(line, "%*lld %*s %d %d", &e.a, &e.b) != 2) {
++                    std::fprintf(stderr, "oracle: bad script line: %s", line);
++                    std::exit(2);
++                }
++                e.isKey = true;
++            } else {
++                std::fprintf(stderr, "oracle: unknown script event: %s", line);
++                std::exit(2);
++            }
++            if (!g_script.empty() && g_script.back().t > e.t) {
++                std::fprintf(stderr, "oracle: script is not sorted by time\n");
++                std::exit(2);
++            }
++            g_script.push_back(e);
++        }
++        std::fclose(f);
++    }
++
++    void writeScreenshot()
++    {
++        static std::uint32_t pixels[LOGICAL_SCREEN_WIDTH * LOGICAL_SCREEN_HEIGHT];
++        Driver::instance().vga().renderScreen(pixels);
++        char name[512];
++        std::snprintf(name, sizeof(name), "%s.%010" PRId64 ".ppm", g_tracePath.c_str(), g_nowUs);
++        std::FILE* f = std::fopen(name, "wb");
++        if (!f)
++            return;
++        std::fprintf(f, "P6\n%d %d\n255\n", LOGICAL_SCREEN_WIDTH, LOGICAL_SCREEN_HEIGHT);
++        for (std::uint32_t p : pixels) {
++            const unsigned char rgb[3] = {
++                static_cast<unsigned char>(p >> 16), static_cast<unsigned char>(p >> 8),
++                static_cast<unsigned char>(p)
++            };
++            std::fwrite(rgb, 1, 3, f);
++        }
++        std::fclose(f);
++    }
++
++    void finish(const char* reason)
++    {
++        if (g_trace) {
++            std::string dump = dumpStateJson();
++            std::fprintf(g_trace, "F %" PRId64 " %s\n", g_nowUs, dump.c_str());
++            if (g_chainEvery > 0)
++                std::fprintf(g_trace, "C %" PRId64 " %u %08x\n", g_nowUs, g_chainSteps, g_chain);
++            std::fprintf(g_trace, "E %" PRId64 " %s %08x\n", g_nowUs, reason, stateHash());
++            std::fclose(g_trace);
++            g_trace = nullptr;
++        }
++    }
++
++    void checkStop()
++    {
++        if (g_stopAt >= 0 && g_nowUs >= g_stopAt) {
++            finish("stop");
++            std::_Exit(0);
++        }
++    }
++
++    void onExit()
++    {
++        finish("exit");
++    }
++
++} // namespace
++
++VirtualClock::time_point VirtualClock::now() noexcept
++{
++    return time_point(duration(g_nowUs));
++}
++
++void advanceTo(VirtualClock::time_point t)
++{
++    const std::int64_t us = t.time_since_epoch().count();
++    if (us > g_nowUs)
++        g_nowUs = us;
++}
++
++void advanceBy(VirtualClock::duration d)
++{
++    assert(d.count() >= 0);
++    g_nowUs += d.count();
++}
++
++void init(int, char*[])
++{
++    if (const char* script = std::getenv("RESL_SCRIPT"); script && *script)
++        loadScript(script);
++    g_stopAt = envInt("RESL_STOP_AT", -1);
++    g_dumpEvery = envInt("RESL_DUMP_EVERY", 1000000);
++    g_nextDump = 0;
++    g_screenshotEvery = envInt("RESL_SCREENSHOT_EVERY", 0);
++    g_chainEvery = envInt("RESL_CHAIN_EVERY", 0);
++    if (const char* tracePath = std::getenv("RESL_TRACE"); tracePath && *tracePath) {
++        g_tracePath = tracePath;
++        g_trace = std::fopen(tracePath, "w");
++        if (!g_trace) {
++            std::fprintf(stderr, "oracle: unable to open trace %s\n", tracePath);
++            std::exit(2);
++        }
++        std::fprintf(g_trace, "V shortline-trace 1\n");
++        std::fprintf(g_trace, "L %d\n", entrancesBeforeRails());
++    }
++    std::atexit(&onExit);
++}
++
++void onTaskAdded(unsigned taskId)
++{
++    if (g_trace)
++        std::fprintf(g_trace, "T %" PRId64 " %u\n", g_nowUs, taskId);
++}
++
++void onTaskResumed(unsigned taskId)
++{
++    ++g_resumeCount;
++    if (g_trace) {
++        const std::uint32_t h = stateHash();
++        if (!g_haveHash || h != g_lastHash) {
++            if (g_chainEvery > 0) {
++                g_chain = fnv(g_chain, static_cast<std::uint32_t>(g_nowUs & 0xFFFFFFFF));
++                g_chain = fnv(g_chain, static_cast<std::uint32_t>(g_nowUs >> 32));
++                g_chain = fnv(g_chain, taskId);
++                g_chain = fnv(g_chain, h);
++                ++g_chainSteps;
++            } else
++                std::fprintf(g_trace, "H %" PRId64 " %u %08x\n", g_nowUs, taskId, h);
++            g_lastHash = h;
++            g_haveHash = true;
++        }
++        if (g_chainEvery > 0 && g_nowUs >= g_nextChain) {
++            std::fprintf(g_trace, "C %" PRId64 " %u %08x\n", g_nowUs, g_chainSteps, g_chain);
++            while (g_nextChain <= g_nowUs)
++                g_nextChain += g_chainEvery;
++        }
++        if (g_dumpEvery > 0 && g_nowUs >= g_nextDump) {
++            std::string dump = dumpStateDeltaJson();
++            std::fprintf(g_trace, "D %" PRId64 " %s\n", g_nowUs, dump.c_str());
++            while (g_nextDump <= g_nowUs)
++                g_nextDump += g_dumpEvery;
++        }
++    }
++    checkStop();
++}
++
++void onFrame()
++{
++    if (g_screenshotEvery > 0 && g_nowUs >= g_nextScreenshot && !g_tracePath.empty()) {
++        writeScreenshot();
++        while (g_nextScreenshot <= g_nowUs)
++            g_nextScreenshot += g_screenshotEvery;
++    }
++    checkStop();
++}
++
++void onSound(std::uint16_t freq)
++{
++    if (g_trace)
++        std::fprintf(g_trace, "S %" PRId64 " %u\n", g_nowUs, static_cast<unsigned>(freq));
++}
++
++void onStatusMessage(const char* msg)
++{
++    if (g_trace)
++        std::fprintf(g_trace, "M %" PRId64 " %s\n", g_nowUs, msg);
++}
++
++void undefinedBehavior(const char* what)
++{
++    if (g_trace)
++        std::fprintf(g_trace, "U %" PRId64 " %s\n", g_nowUs, what);
++    finish("ub");
++    std::_Exit(0);
++}
++
++void deliverInput()
++{
++    while (g_nextEvent < g_script.size() && g_script[g_nextEvent].t <= g_nowUs) {
++        const InputEvent& e = g_script[g_nextEvent++];
++        if (g_trace)
++            std::fprintf(g_trace, "I %" PRId64 " %s %d %d %d %d\n", g_nowUs,
++                         e.isKey ? "key" : "mouse", e.a, e.b, e.c, e.d);
++        if (e.isKey) {
++            KeyboardHandler hdl = Driver::instance().keyboardHandler();
++            if (hdl && e.a)
++                hdl(static_cast<std::uint8_t>(e.a | (e.b ? 0 : g_keyReleasedFlag)));
++        } else
++            Driver::instance().mouse().scriptEvent(
++                static_cast<std::uint16_t>(e.a), static_cast<std::uint16_t>(e.b), e.c, e.d);
++    }
++}
++
++} // namespace resl::oracle
+diff --git a/src/system/driver/headless/oracle.h b/src/system/driver/headless/oracle.h
+new file mode 100644
+index 0000000..38bab44
+--- /dev/null
++++ b/src/system/driver/headless/oracle.h
+@@ -0,0 +1,46 @@
++#pragma once
++
++// Oracle runtime: virtual clock, scripted input and state trace.
++// Everything here replaces wall-clock / SDL behaviour of reSL so that a run
++// is a pure function of (seed, files, script).
++
++#include <chrono>
++#include <cstdint>
++
++namespace resl::oracle {
++
++// Virtual monotonic clock with microsecond resolution.
++struct VirtualClock {
++    using rep = std::int64_t;
++    using period = std::micro;
++    using duration = std::chrono::duration<rep, period>;
++    using time_point = std::chrono::time_point<VirtualClock>;
++    static constexpr bool is_steady = true;
++    static time_point now() noexcept;
++};
++
++// Blocking wait: jump the virtual clock forward (never backwards).
++void advanceTo(VirtualClock::time_point);
++void advanceBy(VirtualClock::duration);
++
++void init(int argc, char* argv[]);
++
++// Called by the scheduler after each task resumption.
++void onTaskResumed(unsigned taskId);
++// Called on every frame boundary (VGAEmulation::flush with a new frame).
++void onFrame();
++
++void onSound(std::uint16_t freq);
++void onStatusMessage(const char*);
++void onTaskAdded(unsigned taskId);
++
++// The game is about to do something undefined (e.g. dereference an invalid
++// rail pointer). The original DOS program reads garbage memory here; reSL
++// crashes. The oracle writes a "U" line, finishes the trace and exits; the
++// TS port must detect the same situation at the same step.
++[[noreturn]] void undefinedBehavior(const char* what);
++
++// Delivers due scripted input events (called from Driver::pollEvent).
++void deliverInput();
++
++} // namespace resl::oracle
+diff --git a/src/system/driver/headless/state_dump.cpp b/src/system/driver/headless/state_dump.cpp
+new file mode 100644
+index 0000000..6293b20
+--- /dev/null
++++ b/src/system/driver/headless/state_dump.cpp
+@@ -0,0 +1,417 @@
++#include "state_dump.h"
++
++#include "driver.h"
++
++#include <game/demo.h>
++#include <game/entrance.h>
++#include <game/header.h>
++#include <game/header_field.h>
++#include <game/melody.h>
++#include <game/mouse/construction_mode.h>
++#include <game/mouse/management_mode.h>
++#include <game/mouse/mouse.h>
++#include <game/mouse/state.h>
++#include <game/player_name.h>
++#include <game/rail.h>
++#include <game/resources/semaphore_glyph.h>
++#include <game/road_construction.h>
++#include <game/semaphore.h>
++#include <game/static_object.h>
++#include <game/switch.h>
++#include <game/train.h>
++#include <system/keyboard.h>
++#include <ui/components/dialog.h>
++#include <ui/game_over.h>
++
++#include <cstdint>
++#include <cstring>
++#include <string>
++#include <utility>
++#include <vector>
++
++namespace resl {
++
++// Variables that are file-local in reSL; P5 makes them visible to the oracle.
++extern std::int16_t g_gameTime;
++extern std::int8_t g_footerMessageTimeout;
++extern std::uint8_t g_previousMouseButtonState;
++extern std::uint8_t g_lastProcessedTrain;
++extern std::uint8_t g_lastProcessedCarriages[20];
++extern char g_demoFileName[16];
++extern MsgMouseEvent g_demoMouseMsg;
++
++std::uint32_t oracleRandState();
++void oracleTimerState(std::int32_t out[5]);
++
++} // namespace resl
++
++namespace resl::oracle {
++
++namespace {
++
++    using Section = std::pair<const char*, std::vector<std::int32_t>>;
++
++    class Writer {
++    public:
++        void section(const char* name) { m_sections.push_back({ name, {} }); }
++        void put(std::int64_t v) { m_sections.back().second.push_back(static_cast<std::int32_t>(v)); }
++        const std::vector<Section>& sections() const { return m_sections; }
++
++    private:
++        std::vector<Section> m_sections;
++    };
++
++    constexpr int kRailCount = 11 * 11 * 6;
++
++    std::int32_t railId(const Rail* r)
++    {
++        if (!r)
++            return 0;
++        if (r == g_disabledSwitchPath)
++            return 1;
++        const Rail* first = &g_rails[0][0][0];
++        if (r >= first && r < first + kRailCount)
++            return 2 + static_cast<std::int32_t>(r - first);
++        for (int i = 0; i < 9; ++i) {
++            if (r == &g_entrances[i].rail)
++                return 2 + kRailCount + i;
++        }
++        return -1; // must never happen
++    }
++
++    std::int32_t carriageId(const Carriage* c)
++    {
++        if (!c)
++            return 0;
++        for (int t = 0; t < 20; ++t) {
++            for (int i = 0; i < 5; ++i) {
++                if (c == &g_trains[t].carriages[i])
++                    return t * 5 + i + 1;
++            }
++        }
++        return -1;
++    }
++
++    std::int32_t trainId(const Train* t)
++    {
++        if (!t)
++            return -1;
++        return static_cast<std::int32_t>(t - &g_trains[0]);
++    }
++
++    void putRail(Writer& w, const Rail& r)
++    {
++        w.put(r.x);
++        w.put(r.y);
++        w.put(r.type);
++        w.put(r.minPathStep);
++        w.put(r.maxPathStep);
++        for (int i = 0; i < 3; ++i)
++            w.put(r.semSlotIdByDirection[i]);
++        for (int i = 0; i < 2; ++i) {
++            w.put(railId(r.connections[i].rail));
++            w.put(r.connections[i].slot);
++        }
++    }
++
++    void putLocation(Writer& w, const Location& l)
++    {
++        w.put(l.pathStep);
++        w.put(l.forwardDirection);
++        w.put(railId(l.rail));
++    }
++
++    void putConnection(Writer& w, const RailConnection& c)
++    {
++        w.put(railId(c.rail));
++        w.put(c.slot);
++    }
++
++    void putRailInfo(Writer& w, const RailInfo& ri)
++    {
++        w.put(ri.roadTypeMask);
++        w.put(ri.tileX);
++        w.put(ri.tileY);
++        w.put(ri.railType);
++        w.put(ri.year_8);
++    }
++
++    template <typename Q, typename F>
++    void putQueue(Writer& w, const Q& q, F&& putItem)
++    {
++        w.put(static_cast<std::int64_t>(q.size()));
++        w.put(q.hasWaitingTask());
++        q.forEach(putItem);
++    }
++
++    void collect(Writer& w)
++    {
++        std::int32_t timer[5];
++        oracleTimerState(timer);
++        MouseDriver& md = Driver::instance().mouse();
++
++        w.section("sys");
++        for (std::int32_t v : timer)
++            w.put(v);
++        w.put(static_cast<std::int32_t>(oracleRandState()));
++        w.put(g_lastKeyPressed);
++        w.put(g_lastKeyCode);
++        w.put(md.buttonState());
++        w.put(md.cursorX());
++        w.put(md.cursorY());
++        w.put(md.cursorVisible());
++
++        w.section("game");
++        w.put(g_gameTime);
++        w.put(g_isDemoMode);
++        w.put(g_gameOver);
++        w.put(g_soundEnabled);
++        w.put(g_previousMouseButtonState);
++        w.put(g_footerMessageTimeout);
++        w.put(g_lastProcessedTrain);
++        for (std::uint8_t v : g_lastProcessedCarriages)
++            w.put(v);
++        w.put(g_entranceCount);
++        w.put(g_railRoadCount);
++        w.put(g_nSwitches);
++        w.put(g_semaphoreCount);
++        w.put(g_newSemaphoreCount);
++        w.put(g_erasedSemaphoreCount);
++        for (std::uint8_t v : g_cuttingDownStaticObjectsByKind)
++            w.put(v);
++        w.put(g_demoFileName[5]);
++        w.put(g_demoMouseMsg.action);
++        w.put(g_demoMouseMsg.x);
++        w.put(g_demoMouseMsg.y);
++        w.put(mouse::g_state.mode == nullptr                  ? 0
++                  : mouse::g_state.mode == &mouse::g_modeManagement ? 1
++                                                                    : 2);
++        w.put(mouse::g_modeManagement.x);
++        w.put(mouse::g_modeManagement.y);
++        w.put(mouse::g_modeConstruction.x);
++        w.put(mouse::g_modeConstruction.y);
++        putRailInfo(w, mouse::g_railCursorState);
++        for (char c : g_playerName)
++            w.put(static_cast<std::uint8_t>(c));
++
++        w.section("headers");
++        for (const HeaderField& h : g_headers) {
++            w.put(h.x);
++            w.put(h.y);
++            w.put(h.valueLimit);
++            w.put(h.nDigits);
++            w.put(h.curAnimatingDigit);
++            w.put(h.value);
++            w.put(h.yScroll);
++            for (std::uint8_t d : h.digitValues)
++                w.put(d);
++        }
++
++        w.section("queues");
++        putQueue(w, g_mouseMsgQueue, [&w](const MsgMouseEvent& e) {
++            w.put(e.action);
++            w.put(e.x);
++            w.put(e.y);
++        });
++        putQueue(w, g_railConstructionMsgQueue, [&w](const RailInfo& ri) { putRailInfo(w, ri); });
++        putQueue(w, g_headerAnimationTaskQueue, [&w](const HeaderValueChangeRequest& r) {
++            w.put(r.delta);
++            w.put(static_cast<int>(r.fieldId));
++            w.put(r.value);
++        });
++
++        w.section("dialogs");
++        for (const Dialog& d : g_dialogs) {
++            w.put(d.x);
++            for (std::int16_t y : d.itemY)
++                w.put(y);
++            w.put(d.itemWidth);
++        }
++        {
++            const char* item = g_dialogs[static_cast<int>(DialogType::Pause)].itemNames[1];
++            w.put(!std::strcmp(item, "Save") ? 0 : !std::strcmp(item, "  OK") ? 1 : 2);
++        }
++
++        w.section("rails");
++        for (int x = 0; x < 11; ++x)
++            for (int y = 0; y < 11; ++y)
++                for (int t = 0; t < 6; ++t)
++                    putRail(w, g_rails[x][y][t]);
++
++        w.section("road");
++        for (std::uint16_t i = 0; i < g_railRoadCount; ++i)
++            putRailInfo(w, g_railRoad[i]);
++        for (int x = 0; x < 11; ++x)
++            for (int y = 0; y < 11; ++y)
++                w.put(g_railroadTypeMasks[x][y]);
++
++        w.section("switches");
++        for (std::uint16_t i = 0; i < g_nSwitches; ++i) {
++            const Switch& s = g_switches[i];
++            w.put(s.x);
++            w.put(s.y);
++            putConnection(w, s.exit);
++            putConnection(w, s.entry);
++            putConnection(w, s.disabledPath);
++            w.put(s.adjacentSwitchIdx);
++        }
++
++        w.section("semaphores");
++        for (std::uint16_t i = 0; i < g_semaphoreCount; ++i) {
++            const Semaphore& s = g_semaphores[i];
++            w.put(railId(s.rail));
++            w.put(static_cast<int>(s.type));
++            w.put(s.isRed);
++            w.put(s.isRightDirection);
++            w.put(s.pixelX);
++            w.put(s.pixelY);
++            w.put(s.glyph ? static_cast<std::int32_t>(s.glyph - &g_semaphoreGlyphs[0][0]) : -1);
++        }
++
++        w.section("entrances");
++        for (const Entrance& e : g_entrances) {
++            w.put(e.bgColor);
++            w.put(e.fgColor);
++            w.put(e.entranceRailInfoIdx);
++            w.put(e.waitingTrainsCount);
++            putRail(w, e.rail);
++        }
++
++        w.section("objects");
++        for (const StaticObject& o : g_staticObjects) {
++            w.put(o.x);
++            w.put(o.y);
++            w.put(static_cast<int>(o.kind));
++            w.put(o.type);
++            w.put(o.color);
++            w.put(o.creationYear);
++        }
++
++        w.section("trains");
++        for (const Train& t : g_trains) {
++            w.put(t.isFreeSlot);
++            w.put(t.carriageCnt);
++            w.put(t.drawingChainIdx);
++            w.put(t.needToRedraw);
++            w.put(t.isActualPosition);
++            w.put(t.speed);
++            w.put(t.maxSpeed);
++            w.put(t.headCarriageIdx);
++            w.put(t.movementDebt);
++            w.put(t.year);
++            w.put(t.lastMovementTime);
++            putLocation(w, t.head);
++            putLocation(w, t.tail);
++            for (const Carriage& c : t.carriages) {
++                w.put(carriageId(c.next));
++                w.put(c.drawingPriority);
++                w.put(trainId(c.train));
++                w.put(c.dstEntranceIdx);
++                w.put(static_cast<int>(c.type));
++                w.put(c.direction);
++                w.put(c.x_direction);
++                putLocation(w, c.location);
++                w.put(c.rect.x1);
++                w.put(c.rect.y1);
++                w.put(c.rect.x2);
++                w.put(c.rect.y2);
++            }
++        }
++
++        w.section("chains");
++        w.put(g_collidedTrainsArrayLen);
++        for (std::uint16_t i = 0; i < g_collidedTrainsArrayLen; ++i) {
++            w.put(carriageId(g_collidedTrainsArray[i].first));
++            w.put(carriageId(g_collidedTrainsArray[i].second));
++        }
++        w.put(g_trainDrawingChainLen);
++        for (std::uint16_t i = 0; i < g_trainDrawingChainLen; ++i) {
++            int guard = 0;
++            for (const Carriage* c = g_trainDrawingChains[i]; c && guard < 200; c = c->next, ++guard)
++                w.put(carriageId(c));
++            w.put(0);
++        }
++        w.put(g_needToRedrawTrains);
++    }
++
++    std::uint32_t fnv(std::uint32_t h, std::uint32_t v)
++    {
++        h ^= v;
++        return h * 16777619u;
++    }
++
++} // namespace
++
++std::uint32_t stateHash()
++{
++    Writer w;
++    collect(w);
++    std::uint32_t h = 2166136261u;
++    for (const Section& s : w.sections()) {
++        h = fnv(h, static_cast<std::uint32_t>(s.second.size()));
++        for (std::int32_t v : s.second)
++            h = fnv(h, static_cast<std::uint32_t>(v));
++    }
++    return h;
++}
++
++int entrancesBeforeRails()
++{
++    return reinterpret_cast<std::uintptr_t>(&g_entrances[0].rail) <
++        reinterpret_cast<std::uintptr_t>(&g_rails[0][0][0]);
++}
++
++namespace {
++
++    std::string toJson(const std::vector<const Section*>& sections)
++    {
++        std::string out = "{";
++        bool firstSection = true;
++        for (const Section* s : sections) {
++            if (!firstSection)
++                out += ',';
++            firstSection = false;
++            out += '"';
++            out += s->first;
++            out += "\":[";
++            for (std::size_t i = 0; i < s->second.size(); ++i) {
++                if (i)
++                    out += ',';
++                out += std::to_string(s->second[i]);
++            }
++            out += ']';
++        }
++        out += '}';
++        return out;
++    }
++
++    std::vector<Section> g_lastDelta;
++
++} // namespace
++
++std::string dumpStateJson()
++{
++    Writer w;
++    collect(w);
++    std::vector<const Section*> all;
++    for (const Section& s : w.sections())
++        all.push_back(&s);
++    return toJson(all);
++}
++
++std::string dumpStateDeltaJson()
++{
++    Writer w;
++    collect(w);
++    std::vector<const Section*> changed;
++    const std::vector<Section>& cur = w.sections();
++    for (std::size_t i = 0; i < cur.size(); ++i) {
++        if (i >= g_lastDelta.size() || g_lastDelta[i].second != cur[i].second)
++            changed.push_back(&cur[i]);
++    }
++    std::string res = toJson(changed);
++    g_lastDelta = cur;
++    return res;
++}
++
++} // namespace resl::oracle
+diff --git a/src/system/driver/headless/state_dump.h b/src/system/driver/headless/state_dump.h
+new file mode 100644
+index 0000000..60d820a
+--- /dev/null
++++ b/src/system/driver/headless/state_dump.h
+@@ -0,0 +1,19 @@
++#pragma once
++
++#include <cstdint>
++#include <string>
++
++namespace resl::oracle {
++
++// Canonical game state (see docs/trace-format.md). The TS port produces
++// exactly the same sections in the same order.
++std::uint32_t stateHash();
++// Full dump: all sections. Delta dump: only sections that changed since the
++// previous delta dump (the first delta dump is full).
++std::string dumpStateJson();
++std::string dumpStateDeltaJson();
++
++// 1 if entrance rails have lower addresses than g_rails (as in DOS: 1d7d:01fc < 262d:259a)
++int entrancesBeforeRails();
++
++} // namespace resl::oracle
+diff --git a/src/system/driver/headless/touch_context.h b/src/system/driver/headless/touch_context.h
+new file mode 100644
+index 0000000..e44c39f
+--- /dev/null
++++ b/src/system/driver/headless/touch_context.h
+@@ -0,0 +1,17 @@
++#pragma once
++
++namespace resl {
++
++enum class LongTouchAction {
++    None,
++    BuildRail,
++    CallServer,
++};
++
++class TouchContextProvider {
++public:
++    virtual LongTouchAction recognizeTouchAction(int x, int y) const = 0;
++    virtual bool isSwipeAllowed() const = 0;
++};
++
++} // namespace resl
+diff --git a/src/system/driver/headless/video.cpp b/src/system/driver/headless/video.cpp
+new file mode 100644
+index 0000000..cf896bc
+--- /dev/null
++++ b/src/system/driver/headless/video.cpp
+@@ -0,0 +1,167 @@
++#include "video.h"
++
++#include "driver.h"
++#include "oracle.h"
++
++#include <cassert>
++#include <cstring>
++
++namespace resl {
++
++VGAEmulation::VGAEmulation()
++{
++    std::memset(&m_vgaState.mem, 0, sizeof(m_vgaState.mem));
++    m_vgaState.palette = {
++        0xFF55AA00, // Green
++        0xFF000000, // Black
++        0xFFAAAAAA, // Gray
++        0xFF555555, // Dark gray
++        0xFFFFFFFF, // White
++        0xFFFFFF55, // Yellow
++        0xFFAAAA00, // Brown
++        0xFF0055FF, // Blue
++        0xFF0055AA, // Dark blue
++        0xFFFF5500, // Red
++        0xFFAA5500, // Dark red
++        0xFF1AFFFF, // Cyan
++        0xFF00AAAA, // Dark cyan
++        0xFF00FF00, // Light green
++        0xFF00AA00, // Dark green
++        0xFFFFFFFF  // Blinking color (Black/White)
++    };
++}
++
++void VGAEmulation::flush()
++{
++    const ClockT::time_point now = ClockT::now();
++    if (now < m_nextFrameTime)
++        return;
++    m_nextFrameTime = now + std::chrono::microseconds(s_frameUs);
++
++    oracle::onFrame();
++    Driver::instance().pollEvent();
++}
++
++void VGAEmulation::waitVerticalRetrace()
++{
++    const ClockT::time_point now = ClockT::now();
++    if (now < m_nextFrameTime)
++        oracle::advanceTo(m_nextFrameTime);
++    flush();
++}
++
++void VGAEmulation::write(vga::VideoMemPtr memPtr, std::uint8_t color)
++{
++    unsigned offset = memPtr - vga::VIDEO_MEM_START_ADDR;
++    assert(offset < 0x10000);
++
++    switch (m_vgaState.writeMode) {
++    case 0:
++        if (m_vgaState.regPlaneMask && m_vgaState.writeMask) {
++            const std::uint8_t mask = m_vgaState.writeMask;
++            for (int plane = 0; plane < 4; ++plane) {
++                if (!(m_vgaState.regPlaneMask & (1 << plane)))
++                    continue;
++                std::uint8_t& v = m_vgaState.mem[offset][plane];
++                v = (v & ~mask) | (mask & color);
++            }
++        }
++        break;
++    case 1:
++        std::memcpy(&m_vgaState.mem[offset], &m_vgaState.latches,
++                    sizeof(m_vgaState.latches));
++        break;
++
++    case 2:
++        if (m_vgaState.writeMask) {
++            const std::uint8_t mask = m_vgaState.writeMask;
++            for (int plane = 0; plane < 4; ++plane) {
++                std::uint8_t& v = m_vgaState.mem[offset][plane];
++
++                std::uint8_t bitsToSet = mask * (color & 1);
++                switch (m_vgaState.writeOperation) {
++                case vga::WriteOperation::Copy:
++                    break;
++                case vga::WriteOperation::And:
++                    bitsToSet &= v;
++                    break;
++                case vga::WriteOperation::Or:
++                    bitsToSet |= v;
++                    break;
++                case vga::WriteOperation::Xor:
++                    bitsToSet ^= v;
++                    break;
++                }
++                v = (v & ~mask) | bitsToSet;
++                color >>= 1;
++            }
++        }
++        break;
++    };
++}
++
++std::uint8_t VGAEmulation::read(vga::VideoMemPtr memPtr)
++{
++    unsigned offset = memPtr - vga::VIDEO_MEM_START_ADDR;
++    assert(offset < 0x10000);
++    std::memcpy(&m_vgaState.latches, &m_vgaState.mem[offset], sizeof(m_vgaState.latches));
++    assert(m_vgaState.readMode == 0);
++    return m_vgaState.mem[offset][m_vgaState.readPlane];
++}
++
++void VGAEmulation::setWriteMask(std::uint8_t mask) { m_vgaState.writeMask = mask; }
++std::uint8_t VGAEmulation::writeMode() { return m_vgaState.writeMode; }
++
++void VGAEmulation::setMode(std::uint8_t mode)
++{
++    m_vgaState.writeMode = mode & 3;
++    m_vgaState.readMode = (mode >> 2) & 1;
++}
++
++void VGAEmulation::setLineCompareRegister(std::uint16_t y) { m_vgaState.overflowLineCompare = y & 0x1FF; }
++
++void VGAEmulation::setFrameOrigin([[maybe_unused]] std::int16_t x, std::int16_t y)
++{
++    assert(x == 0);
++    m_vgaState.yOrigin = y;
++}
++
++void VGAEmulation::setPlaneMask(std::uint8_t mask) { m_vgaState.regPlaneMask = mask; }
++void VGAEmulation::setReadPlane(std::uint8_t p) { m_vgaState.readPlane = p; }
++void VGAEmulation::setWriteOperation(vga::WriteOperation op) { m_vgaState.writeOperation = op; }
++
++void VGAEmulation::setPaletteItem(std::uint8_t idx, std::uint32_t argb)
++{
++    assert(idx < m_vgaState.palette.size());
++    m_vgaState.palette[idx] = argb | 0xFF000000;
++}
++
++unsigned VGAEmulation::timeToNextFrameMS() const
++{
++    const ClockT::time_point now = ClockT::now();
++    if (now >= m_nextFrameTime)
++        return 0;
++    return static_cast<unsigned>(
++        std::chrono::duration_cast<std::chrono::milliseconds>(m_nextFrameTime - now).count());
++}
++
++void VGAEmulation::renderScreen(std::uint32_t* dst) const
++{
++    const auto pixel = [this](int x, int y) {
++        const std::size_t byte = static_cast<std::size_t>(y) * vga::VIDEO_MEM_ROW_BYTES + x / 8;
++        const int bit = 7 - (x & 7);
++        int c = 0;
++        for (int p = 0; p < 4; ++p)
++            c |= ((m_vgaState.mem[byte & 0xFFFF][p] >> bit) & 1) << p;
++        return m_vgaState.palette[c];
++    };
++    const int split = m_vgaState.overflowLineCompare;
++    for (int y = 0; y < LOGICAL_SCREEN_HEIGHT; ++y) {
++        // rows above the line-compare register come from yOrigin, the rest from address 0
++        const int srcY = y < split ? y + m_vgaState.yOrigin : y - split;
++        for (int x = 0; x < LOGICAL_SCREEN_WIDTH; ++x)
++            dst[y * LOGICAL_SCREEN_WIDTH + x] = pixel(x, srcY);
++    }
++}
++
++} // namespace resl
+diff --git a/src/system/driver/headless/video.h b/src/system/driver/headless/video.h
+new file mode 100644
+index 0000000..e835026
+--- /dev/null
++++ b/src/system/driver/headless/video.h
+@@ -0,0 +1,84 @@
++#pragma once
++
++#include "oracle.h"
++
++#include <graphics/vga.h>
++
++#include <array>
++#include <cstdint>
++#include <functional>
++
++namespace resl {
++
++// Headless VGA emulation: the video memory is kept (it is cheap and allows
++// screenshots of the oracle), but nothing is shown. Frame timing uses the
++// virtual clock.
++class VGAEmulation {
++public:
++    VGAEmulation();
++
++    VGAEmulation(const VGAEmulation&) = delete;
++    VGAEmulation& operator=(const VGAEmulation&) = delete;
++
++    void requestScreenUpdate() { }
++
++    void flush();
++    void waitVerticalRetrace();
++
++    void setDebugMode(bool) { }
++    bool isDebugMode() const { return false; }
++    void setFullscreenMode(bool) { }
++
++    [[nodiscard]] std::uint8_t read(vga::VideoMemPtr);
++    void write(vga::VideoMemPtr, std::uint8_t color);
++
++    void setWriteMask(std::uint8_t);
++
++    [[nodiscard]] std::uint8_t writeMode();
++    void setMode(std::uint8_t);
++
++    void setPlaneMask(std::uint8_t);
++    void setReadPlane(std::uint8_t);
++    void setWriteOperation(vga::WriteOperation);
++
++    void setLineCompareRegister(std::uint16_t);
++    void setFrameOrigin(std::int16_t x, std::int16_t y);
++
++    void setPaletteItem(std::uint8_t idx, std::uint32_t argb);
++
++    unsigned timeToNextFrameMS() const;
++
++    template <typename T>
++    void addOverlay(T&&) { }
++
++    std::int64_t nextFrameTimeUs() const { return m_nextFrameTime.time_since_epoch().count(); }
++
++    // Renders the visible screen (640x350, as shown to the user) to ARGB.
++    void renderScreen(std::uint32_t* dst) const;
++
++    // reSL uses 60 FPS (the original VGA mode is 70 Hz). See docs/fidelity.md.
++    static constexpr int s_FPS = 60;
++    static constexpr std::int64_t s_frameUs = 1000000 / s_FPS;
++
++private:
++    using ClockT = oracle::VirtualClock;
++
++    struct VGAState {
++        std::uint8_t latches[4] = {};
++        std::uint8_t writeMask = 0;
++        std::uint8_t writeMode = 2;
++        vga::WriteOperation writeOperation = vga::WriteOperation::Copy;
++        std::uint8_t readMode = 0;
++        std::uint8_t readPlane = 0;
++        std::uint8_t regPlaneMask = 0xF;
++        std::uint16_t overflowLineCompare = 0;
++        std::int16_t yOrigin = 0;
++        std::array<std::uint32_t, 16> palette;
++        std::uint8_t mem[0x10000][4];
++    };
++
++    VGAState m_vgaState;
++    ClockT::time_point m_nextFrameTime = {};
++};
++
++} // namespace resl
+diff --git a/src/system/driver/sdl/audio.cpp b/src/system/driver/sdl/audio.cpp
+deleted file mode 100644
+index c525346..0000000
+--- a/src/system/driver/sdl/audio.cpp
++++ /dev/null
+@@ -1,90 +0,0 @@
+-#include "audio.h"
+-
+-#include <SDL_error.h>
+-
+-#include <cassert>
+-#include <iostream>
+-
+-namespace resl {
+-
+-namespace {
+-
+-    constexpr float g_volume = 0.2f;
+-    constexpr int g_sampleRate = 22050;
+-
+-} // namespace
+-
+-AudioDriver::AudioDriver()
+-{
+-    SDL_AudioSpec desired;
+-    SDL_zero(desired);
+-    desired.freq = g_sampleRate;
+-    desired.format = AUDIO_F32;
+-    desired.channels = 1;
+-    desired.samples = 256;
+-    desired.callback = &fillBuffer;
+-    desired.userdata = this;
+-
+-    m_device = SDL_OpenAudioDevice(nullptr, 0, &desired, nullptr, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
+-    if (!m_device) [[unlikely]] {
+-        // Failure to initialize an audio device is not critical - just continue without sound
+-        std::cerr << "WARNING: unable to initialize an audio device! Continue without sound.\n"
+-                  << SDL_GetError() << std::endl;
+-        return;
+-    }
+-}
+-
+-AudioDriver::~AudioDriver()
+-{
+-    if (m_device)
+-        SDL_CloseAudioDevice(m_device);
+-}
+-
+-void AudioDriver::startSound(std::uint16_t frequency)
+-{
+-    assert(frequency * 2 <= g_sampleRate);
+-
+-    if (!m_device) [[unlikely]]
+-        return;
+-
+-    {
+-        // SDL calls the callback in a separate thread
+-        m_frequency.store(frequency, std::memory_order_relaxed);
+-    }
+-    SDL_PauseAudioDevice(m_device, 0);
+-}
+-
+-void AudioDriver::stopSound()
+-{
+-    if (!m_device) [[unlikely]]
+-        return;
+-
+-    SDL_PauseAudioDevice(m_device, 1);
+-}
+-
+-void AudioDriver::fillBuffer(void* userData, Uint8* data, int len)
+-{
+-    AudioDriver* drv = reinterpret_cast<AudioDriver*>(userData);
+-    drv->fill(reinterpret_cast<float*>(data), len / sizeof(float));
+-}
+-
+-void AudioDriver::fill(float* buf, int len)
+-{
+-    std::uint16_t frequency;
+-    {
+-        // SDL calls the callback in a separate thread
+-        frequency = m_frequency.load(std::memory_order_relaxed);
+-    }
+-
+-    const float phaseStep =
+-        static_cast<float>(frequency) / static_cast<float>(g_sampleRate);
+-
+-    for (int i = 0; i < len; ++i) {
+-        buf[i] = m_phase > 0.5f ? g_volume : -g_volume;
+-        m_phase += phaseStep;
+-        if (m_phase >= 1.0f)
+-            m_phase -= 1.0f;
+-    }
+-}
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/audio.h b/src/system/driver/sdl/audio.h
+deleted file mode 100644
+index c8ffbd5..0000000
+--- a/src/system/driver/sdl/audio.h
++++ /dev/null
+@@ -1,31 +0,0 @@
+-#pragma once
+-
+-#include <SDL_audio.h>
+-#include <SDL_stdinc.h>
+-
+-#include <atomic>
+-#include <cstdint>
+-
+-namespace resl {
+-
+-class AudioDriver {
+-public:
+-    AudioDriver();
+-    ~AudioDriver();
+-
+-    AudioDriver(const AudioDriver&) = delete;
+-    AudioDriver& operator=(const AudioDriver&) = delete;
+-
+-    void startSound(std::uint16_t frequency);
+-    void stopSound();
+-
+-private:
+-    static void fillBuffer(void*, Uint8*, int);
+-    void fill(float*, int);
+-
+-    std::atomic<std::uint16_t> m_frequency = 0;
+-    SDL_AudioDeviceID m_device = 0;
+-    float m_phase = 0;
+-};
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/driver.cpp b/src/system/driver/sdl/driver.cpp
+deleted file mode 100644
+index 21ddffe..0000000
+--- a/src/system/driver/sdl/driver.cpp
++++ /dev/null
+@@ -1,243 +0,0 @@
+-#include "driver.h"
+-
+-// IWYU pragma: no_include "system/driver/sdl/driver.h"
+-
+-#include <system/driver/driver.h>
+-#include <system/keyboard.h>
+-
+-#include <graphics/vga.h>
+-
+-#include <SDL.h>
+-#include <SDL_error.h>
+-#include <SDL_events.h>
+-#include <SDL_hints.h>
+-#include <SDL_image.h>
+-#include <SDL_mouse.h>
+-#include <SDL_scancode.h>
+-#include <SDL_video.h>
+-
+-#include <chrono>
+-#include <cstdint>
+-#include <cstdlib>
+-#include <iostream>
+-#include <thread>
+-
+-#ifdef __EMSCRIPTEN__
+-#   include <emscripten.h>
+-#endif
+-
+-namespace resl {
+-
+-Driver::Driver()
+-    : m_mouse(m_vga.renderer())
+-{
+-}
+-
+-Driver::SDLInit::SDLInit()
+-{
+-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS)) [[unlikely]] {
+-        std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
+-        std::exit(EXIT_FAILURE);
+-    }
+-    if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) [[unlikely]] {
+-        std::cerr << "Unable to initialize SDL Image (png)" << std::endl;
+-        std::exit(EXIT_FAILURE);
+-    }
+-
+-    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+-    SDL_ShowCursor(false);
+-}
+-
+-Driver::SDLInit::~SDLInit()
+-{
+-    IMG_Quit();
+-    SDL_Quit();
+-}
+-
+-void Driver::sleep(unsigned ms)
+-{
+-#ifdef __EMSCRIPTEN__
+-
+-    // We have to return to the main loop to update the picture.
+-    // But this can be a relatively long operation, which is why on small delays
+-    // it should be done only when necessary.
+-    const unsigned timeToNextFrame = vga().timeToNextFrameMS();
+-    if (ms < timeToNextFrame) {
+-        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+-        return;
+-    }
+-
+-    using ClockT = std::chrono::steady_clock;
+-    const ClockT::time_point startTime = ClockT::now();
+-    if (timeToNextFrame)
+-        std::this_thread::sleep_for(std::chrono::milliseconds(timeToNextFrame));
+-    vga().flush();
+-
+-    const auto timePassed =
+-        std::chrono::duration_cast<std::chrono::milliseconds>(ClockT::now() - startTime).count();
+-
+-    const unsigned msToSleep = timePassed < ms ? ms - timePassed : 0;
+-    emscripten_sleep(msToSleep);
+-
+-#else // __EMSCRIPTEN__
+-
+-    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+-    vga().flush();
+-
+-#endif // __EMSCRIPTEN__
+-}
+-
+-void Driver::pollEvent()
+-{
+-    SDL_Event e;
+-    while (SDL_PollEvent(&e)) {
+-        switch (e.type) {
+-        case SDL_QUIT:
+-            std::exit(EXIT_SUCCESS);
+-            break;
+-
+-        case SDL_MOUSEBUTTONDOWN:
+-        case SDL_MOUSEBUTTONUP:
+-            if (!vga().isDebugMode()) {
+-                e.button.x = screenXToLogical(e.button.x);
+-                e.button.y = screenYToLogical(e.button.y);
+-            }
+-            mouse().onMouseButtonEvent(e.button);
+-            break;
+-        case SDL_MOUSEMOTION:
+-            if (!vga().isDebugMode()) {
+-                e.motion.x = screenXToLogical(e.motion.x);
+-                e.motion.y = screenYToLogical(e.motion.y);
+-            }
+-            mouse().onMouseMove(e.motion);
+-            break;
+-        case SDL_FINGERMOTION:
+-        case SDL_FINGERDOWN:
+-        case SDL_FINGERUP:
+-            mouse().onTouch(e.tfinger);
+-            break;
+-        case SDL_KEYDOWN:
+-        case SDL_KEYUP:
+-            onKeyboardEvent(e.key);
+-            break;
+-        case SDL_WINDOWEVENT:
+-            if (e.window.event == SDL_WINDOWEVENT_RESIZED)
+-                vga().requestScreenUpdate();
+-            break;
+-        }
+-    }
+-}
+-
+-inline std::uint8_t scancodeToKeyCode(SDL_Scancode sc)
+-{
+-    /* http://www.techhelpmanual.com/57-keyboard_scan_codes.html
+-
+-        01   1  Esc │12  18  E    │23  35  H      │34  52  . >    │45  69  NumLock
+-        02   2  1 ! │13  19  R    │24  36  J      │35  53  / ?    │46  70  ScrollLck
+-        03   3  2 @ │14  20  T    │25  37  K      │36  54 Shift(R)│47  71  Home [7]
+-        04   4  3 # │15  21  Y    │26  38  L      │37  55  * PrtSc│48  72  ↑    [8]
+-        05   5  4 $ │16  22  U    │27  39  ; :    │38  56  Alt    │49  73  PgUp [9]
+-        06   6  5 % │17  23  I    │28  40  " '    │39  57  space  │4a  74  K -
+-        07   7  6 ^ │18  24  O    │29  41  ` ~    │3a  58  CapsLck│4b  75  ←    [4]
+-        08   8  7 & │19  25  P    │2a  42 Shift(L)│3b  59  F1     │4c  76       [5]
+-        09   9  8 * │1a  26  [ {  │2b  43  \ |    │3c  60  F2     │4d  77  →    [6]
+-        0a  10  9 ( │1b  27  ] }  │2c  44  Z      │3d  61  F3     │4e  78  K +
+-        0b  11  0 ) │1c  28  Enter│2d  45  X      │3e  62  F4     │4f  79  End  [1]
+-        0c  12  - _ │1d  29  Ctrl │2e  46  C      │3f  63  F5     │50  80  ↓    [2]
+-        0d  13  + = │1e  30  A    │2f  47  V      │40  64  F6     │51  81  PgDn [3]
+-        0e  14  bksp│1f  31  S    │30  48  B      │41  65  F7     │52  82  Ins  [0]
+-        0f  15  Tab │20  32  D    │31  49  N      │42  66  F8     │53  83  Del  [.]
+-        10  16  Q   │21  33  F    │32  50  M      │43  67  F9     │
+-        11  17  W   │22  34  G    │33  51  , <    │44  68  F10    │
+-
+-    */
+-
+-    switch (sc) {
+-    case SDL_SCANCODE_ESCAPE: return 1;
+-    case SDL_SCANCODE_1: return 2;
+-    case SDL_SCANCODE_2: return 3;
+-    case SDL_SCANCODE_3: return 4;
+-    case SDL_SCANCODE_4: return 5;
+-    case SDL_SCANCODE_5: return 6;
+-    case SDL_SCANCODE_6: return 7;
+-    case SDL_SCANCODE_7: return 8;
+-    case SDL_SCANCODE_8: return 9;
+-    case SDL_SCANCODE_9: return 10;
+-    case SDL_SCANCODE_0: return 11;
+-    case SDL_SCANCODE_MINUS: return 12;
+-    case SDL_SCANCODE_EQUALS: return 13;
+-    case SDL_SCANCODE_BACKSPACE: return 14;
+-
+-    case SDL_SCANCODE_TAB: return 15;
+-    case SDL_SCANCODE_Q: return 16;
+-    case SDL_SCANCODE_W: return 17;
+-    case SDL_SCANCODE_E: return 18;
+-    case SDL_SCANCODE_R: return 19;
+-    case SDL_SCANCODE_T: return 20;
+-    case SDL_SCANCODE_Y: return 21;
+-    case SDL_SCANCODE_U: return 22;
+-    case SDL_SCANCODE_I: return 23;
+-    case SDL_SCANCODE_O: return 24;
+-    case SDL_SCANCODE_P: return 25;
+-    case SDL_SCANCODE_LEFTBRACKET: return 26;
+-    case SDL_SCANCODE_RIGHTBRACKET: return 27;
+-    case SDL_SCANCODE_RETURN: return 28;
+-    case SDL_SCANCODE_LCTRL:
+-    case SDL_SCANCODE_RCTRL: return 29;
+-
+-    case SDL_SCANCODE_A: return 30;
+-    case SDL_SCANCODE_S: return 31;
+-    case SDL_SCANCODE_D: return 32;
+-    case SDL_SCANCODE_F: return 33;
+-    case SDL_SCANCODE_G: return 34;
+-    case SDL_SCANCODE_H: return 35;
+-    case SDL_SCANCODE_J: return 36;
+-    case SDL_SCANCODE_K: return 37;
+-    case SDL_SCANCODE_L: return 38;
+-    case SDL_SCANCODE_SEMICOLON: return 39;
+-    case SDL_SCANCODE_APOSTROPHE: return 40;
+-    case SDL_SCANCODE_GRAVE: return 41;
+-
+-    case SDL_SCANCODE_LSHIFT: return 42;
+-    case SDL_SCANCODE_BACKSLASH: return 43;
+-    case SDL_SCANCODE_Z: return 44;
+-    case SDL_SCANCODE_X: return 45;
+-    case SDL_SCANCODE_C: return 46;
+-    case SDL_SCANCODE_V: return 47;
+-    case SDL_SCANCODE_B: return 48;
+-    case SDL_SCANCODE_N: return 49;
+-    case SDL_SCANCODE_M: return 50;
+-    case SDL_SCANCODE_COMMA: return 51;
+-    case SDL_SCANCODE_PERIOD: return 52;
+-    case SDL_SCANCODE_SLASH: return 53;
+-    case SDL_SCANCODE_RSHIFT: return 54;
+-
+-    // PrtSc : 55
+-    case SDL_SCANCODE_LALT:
+-    case SDL_SCANCODE_RALT: return 56;
+-
+-    case SDL_SCANCODE_SPACE: return 57;
+-    case SDL_SCANCODE_CAPSLOCK: return 58;
+-
+-    default: return 0;
+-    }
+-}
+-
+-void Driver::onKeyboardEvent(const SDL_KeyboardEvent& e)
+-{
+-    if (e.keysym.scancode == SDL_SCANCODE_F5 && e.type == SDL_KEYUP)
+-        vga().setFullscreenMode(true);
+-
+-    if (!m_keyboardHandler) [[unlikely]]
+-        return;
+-
+-    std::uint8_t keycode = scancodeToKeyCode(e.keysym.scancode);
+-    if (!keycode)
+-        return;
+-
+-    if (e.type == SDL_KEYUP)
+-        keycode |= g_keyReleasedFlag;
+-    m_keyboardHandler(keycode);
+-}
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/driver.h b/src/system/driver/sdl/driver.h
+deleted file mode 100644
+index b01f37d..0000000
+--- a/src/system/driver/sdl/driver.h
++++ /dev/null
+@@ -1,62 +0,0 @@
+-#pragma once
+-
+-// IWYU pragma: private, include <system/driver/driver.h>
+-// IWYU pragma: friend "system/driver/sdl/.*"
+-
+-// IWYU pragma: no_include "system/driver/sdl/audio.h"
+-// IWYU pragma: no_include "system/driver/sdl/mouse.h"
+-// IWYU pragma: no_include "system/driver/sdl/video.h"
+-
+-#include "audio.h" // IWYU pragma: export
+-#include "mouse.h" // IWYU pragma: export
+-#include "video.h" // IWYU pragma: export
+-
+-#include <system/keyboard.h>
+-
+-#include <SDL_events.h>
+-
+-namespace resl {
+-
+-class Driver {
+-public:
+-    using VGAAdaptor = VGAEmulation;
+-
+-    static Driver& instance()
+-    {
+-        static Driver g_instance;
+-        return g_instance;
+-    }
+-
+-    VGAEmulation& vga() { return m_vga; }
+-    AudioDriver& audio() { return m_audio; }
+-    MouseDriver& mouse() { return m_mouse; }
+-
+-    void sleep(unsigned ms);
+-
+-    void setKeyboardHandler(KeyboardHandler hdl) { m_keyboardHandler = hdl; }
+-
+-    void pollEvent();
+-
+-private:
+-    Driver();
+-    Driver(const Driver&) = delete;
+-    Driver& operator=(const Driver&) = delete;
+-
+-    void onKeyboardEvent(const SDL_KeyboardEvent&);
+-
+-    class SDLInit {
+-    public:
+-        SDLInit();
+-        ~SDLInit();
+-    };
+-
+-    SDLInit m_sdl;
+-
+-    VGAEmulation m_vga;
+-    AudioDriver m_audio;
+-    MouseDriver m_mouse;
+-
+-    KeyboardHandler m_keyboardHandler = nullptr;
+-};
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/mouse.cpp b/src/system/driver/sdl/mouse.cpp
+deleted file mode 100644
+index ab9f7f3..0000000
+--- a/src/system/driver/sdl/mouse.cpp
++++ /dev/null
+@@ -1,393 +0,0 @@
+-#include "mouse.h"
+-
+-#include "system/driver/sdl/driver.h"
+-#include "system/driver/sdl/video.h"
+-#include "touch_handler.h"
+-#include <graphics/vga.h>
+-#include <system/mouse.h>
+-
+-#include <SDL_error.h>
+-#include <SDL_mouse.h>
+-#include <SDL_pixels.h>
+-#include <SDL_rect.h>
+-#include <SDL_stdinc.h>
+-#include <SDL_surface.h>
+-
+-#include <algorithm>
+-#include <cassert>
+-#include <cstdint>
+-#include <cstdlib>
+-#include <functional>
+-#include <iostream>
+-#include <iterator>
+-#include <utility>
+-
+-#ifndef NDEBUG
+-#   include <limits>
+-#endif
+-
+-namespace resl {
+-namespace {
+-
+-    /* 1d7d:2582 : 32 bytes */
+-    const std::uint8_t g_cursorGlyph1[] = {
+-        0x00, 0xc0, 0x00, 0xa0, 0x00, 0x90, 0x00, 0x88, 0x00, 0x84, 0x00, 0x82,
+-        0x00, 0x81, 0x80, 0x80, 0x40, 0x80, 0x20, 0x80, 0xe0, 0x81, 0x00, 0xb9,
+-        0x00, 0xc9, 0x80, 0x04, 0x80, 0x04, 0x80, 0x03
+-    };
+-
+-    /* 1d7d:25a2 : 32 bytes */
+-    const std::uint8_t g_cursorGlyph2[] = {
+-        0x00, 0x00, 0x00, 0x40, 0x00, 0x60, 0x00, 0x70, 0x00, 0x78, 0x00, 0x7c,
+-        0x00, 0x7e, 0x00, 0x7f, 0x80, 0x7f, 0xc0, 0x7f, 0x00, 0x7c, 0x00, 0x46,
+-        0x00, 0x06, 0x00, 0x03, 0x00, 0x03, 0x00, 0x00
+-    };
+-
+-    constexpr int cursorW = 16;
+-    constexpr int cursorH = 16;
+-
+-    SDL_Texture* createTexture(SDL_Renderer* renderer)
+-    {
+-        constexpr int wBytes = cursorW / 8;
+-        static_assert(std::size(g_cursorGlyph1) == wBytes * cursorH);
+-        static_assert(std::size(g_cursorGlyph2) == wBytes * cursorH);
+-
+-        std::uint32_t data[cursorW * cursorH];
+-
+-        for (int y = 0; y < cursorH; ++y) {
+-            for (int x = 0; x < wBytes; ++x) {
+-                const int srcOffset = y * wBytes + (wBytes - x - 1);
+-                std::uint8_t black = g_cursorGlyph1[srcOffset];
+-                std::uint8_t white = g_cursorGlyph2[srcOffset];
+-
+-                const int dstOffset = y * cursorW + x * 8;
+-                for (int bit = 0; bit < 8; ++bit) {
+-                    std::uint32_t color = 0;
+-                    if (white & 0x80)
+-                        color = 0xFFFFFFFF;
+-                    else if (black & 0x80)
+-                        color = 0xFF000000;
+-                    data[dstOffset + bit] = color;
+-                    black <<= 1;
+-                    white <<= 1;
+-                }
+-            }
+-        }
+-        SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormatFrom(
+-            data, cursorW, cursorH, sizeof(std::uint32_t) * 8,
+-            cursorW * sizeof(std::uint32_t),
+-            SDL_PIXELFORMAT_ARGB8888);
+-        if (!surf) [[unlikely]] {
+-            std::cerr << "SDL_CreateSurfaceFrom failed: "
+-                      << SDL_GetError() << std::endl;
+-            std::abort();
+-        }
+-
+-        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surf);
+-        if (!texture) [[unlikely]] {
+-            std::cerr << "SDL_CreateTextureFromSurface failed: "
+-                      << SDL_GetError() << std::endl;
+-            std::abort();
+-        }
+-        SDL_FreeSurface(surf);
+-
+-        return texture;
+-    }
+-
+-    std::uint16_t mouseButtonState()
+-    {
+-        Uint32 state = SDL_GetMouseState(nullptr, nullptr);
+-        std::uint16_t res = 0;
+-
+-        if (state & SDL_BUTTON(SDL_BUTTON_LEFT))
+-            res |= MouseButton::MB_LEFT;
+-        if (state & SDL_BUTTON(SDL_BUTTON_RIGHT))
+-            res |= MouseButton::MB_RIGHT;
+-        if (state & SDL_BUTTON(SDL_BUTTON_MIDDLE))
+-            res |= MouseButton::MB_MIDDLE;
+-        return res;
+-    }
+-
+-    bool hasMouse()
+-    {
+-        // https://discourse.libsdl.org/t/detect-if-the-mouse-is-available-on-the-current-platform/25081
+-        SDL_Cursor* c = SDL_GetDefaultCursor();
+-        if (c) {
+-            SDL_FreeCursor(c);
+-            return true;
+-        }
+-        return false;
+-    }
+-
+-    inline MouseButton mouseButton(const SDL_MouseButtonEvent& e)
+-    {
+-        switch (e.button) {
+-        case SDL_BUTTON_LEFT:
+-            return MouseButton::MB_LEFT;
+-        case SDL_BUTTON_RIGHT:
+-            return MouseButton::MB_RIGHT;
+-        case SDL_BUTTON_MIDDLE:
+-            return MouseButton::MB_MIDDLE;
+-        }
+-        return MouseButton::MB_NONE;
+-    }
+-
+-    std::uint16_t mousePressedFlags(const SDL_MouseButtonEvent& e)
+-    {
+-        assert(e.type == SDL_MOUSEBUTTONDOWN);
+-        switch (e.button) {
+-        case SDL_BUTTON_LEFT:
+-            return MouseEventType::ME_LEFTPRESSED;
+-        case SDL_BUTTON_RIGHT:
+-            return MouseEventType::ME_RIGHTPRESSED;
+-        case SDL_BUTTON_MIDDLE:
+-            return MouseEventType::ME_CENTERPRESSED;
+-        }
+-        return 0;
+-    }
+-
+-    std::uint16_t mouseReleasedFlags(const SDL_MouseButtonEvent& e)
+-    {
+-        assert(e.type == SDL_MOUSEBUTTONUP);
+-        switch (e.button) {
+-        case SDL_BUTTON_LEFT:
+-            return MouseEventType::ME_LEFTRELEASED;
+-        case SDL_BUTTON_RIGHT:
+-            return MouseEventType::ME_RIGHTRELEASED;
+-        case SDL_BUTTON_MIDDLE:
+-            return MouseEventType::ME_CENTERRELEASED;
+-        }
+-        return 0;
+-    }
+-
+-} // namespace
+-
+-MouseDriver::MouseDriver(SDL_Renderer* renderer)
+-    : m_touchHandler(
+-          renderer,
+-          [this](TouchHandler::Action a, int screenX, int screenY) {
+-              // touch handler works in physical coordinates,
+-              // need to convert to logical to handle the action
+-              const int logicalX = screenXToLogical(screenX);
+-              const int logicalY = screenYToLogical(screenY);
+-              handleTouchAction(a, logicalX, logicalY);
+-          })
+-    , m_mouseButtonState(mouseButtonState())
+-    , m_cursorTexture(createTexture(renderer))
+-    , m_isTouchDevice(!hasMouse())
+-{
+-}
+-
+-MouseDriver::~MouseDriver()
+-{
+-    SDL_DestroyTexture(m_cursorTexture);
+-}
+-
+-void MouseDriver::setCursorVisibility(bool visible)
+-{
+-    m_cursorVisible = visible;
+-}
+-
+-bool MouseDriver::cursorVisible() const noexcept
+-{
+-    return !m_isTouchDevice && m_cursorVisible;
+-}
+-
+-void MouseDriver::setPosition(int x, int y)
+-{
+-    // SDL_WarpMouseInWindow returns void, but it may fail in some cases
+-    // (e.g. this doesn't work in WASM environment).
+-    // Thus, we manually issue a motion event (otherwise the demo mode might be broken).
+-    SDL_MouseMotionEvent e = {};
+-    e.x = x;
+-    e.y = y;
+-    onMouseMove(e);
+-}
+-
+-MouseDriver::HandlerHolder::HandlerHolder() noexcept
+-    : m_iter(Driver::instance().mouse().m_handlers.end())
+-{
+-}
+-
+-MouseDriver::HandlerHolder::HandlerHolder(HandlerStorageT::iterator iter) noexcept
+-    : m_iter(iter)
+-{
+-}
+-
+-MouseDriver::HandlerHolder::~HandlerHolder()
+-{
+-    if (m_iter != Driver::instance().mouse().m_handlers.end())
+-        Driver::instance().mouse().m_handlers.erase(m_iter);
+-}
+-
+-MouseDriver::HandlerHolder::HandlerHolder(HandlerHolder&& other) noexcept
+-{
+-    std::swap(m_iter, other.m_iter);
+-}
+-
+-MouseDriver::HandlerHolder&
+-MouseDriver::HandlerHolder::operator=(HandlerHolder&& other) noexcept
+-{
+-    std::swap(m_iter, other.m_iter);
+-    return *this;
+-}
+-
+-MouseDriver::HandlerHolder MouseDriver::addHandler(MouseHandler hdl)
+-{
+-    m_handlers.push_front(hdl);
+-    return { m_handlers.begin() };
+-}
+-
+-MouseDriver::TouchContextProviderHolder::TouchContextProviderHolder(TouchHandler& th)
+-    : m_touchHandler(th)
+-{
+-}
+-
+-MouseDriver::TouchContextProviderHolder::~TouchContextProviderHolder()
+-{
+-    m_touchHandler.setTouchContextProvider(nullptr);
+-}
+-
+-MouseDriver::TouchContextProviderHolder MouseDriver::setTouchContextProvider(TouchContextProvider& tcp)
+-{
+-    m_touchHandler.setTouchContextProvider(&tcp);
+-    return { m_touchHandler };
+-}
+-
+-bool MouseDriver::updateAnimation()
+-{
+-    if (m_isTouchDevice)
+-        return m_touchHandler.updateAnimation();
+-    return false;
+-}
+-
+-void MouseDriver::drawCursor(SDL_Renderer* renderer)
+-{
+-    if (m_isTouchDevice) {
+-        m_touchHandler.draw(renderer);
+-        return;
+-    }
+-
+-    /* It would be better to use SDL_CreateCursor / SDL_SetCursor to set
+-       a custom cursor. But in this case the cursor is drawn very blurry
+-       on high-dpi systems (like MacBook with retina display).
+-       So, we use custom cursor drawing instead.
+-     */
+-    if (!cursorVisible())
+-        return;
+-
+-    assert(m_cursorTexture);
+-
+-    SDL_Rect dstRect;
+-    if (Driver::instance().vga().isDebugMode())
+-        dstRect = { m_cursorX, m_cursorY, cursorW, cursorH };
+-    else {
+-        dstRect = {
+-            m_cursorX * PHYSICAL_SCREEN_WIDTH / LOGICAL_SCREEN_WIDTH,
+-            m_cursorY * PHYSICAL_SCREEN_HEIGHT / LOGICAL_SCREEN_HEIGHT,
+-            cursorW, cursorH
+-        };
+-    }
+-    SDL_RenderCopy(renderer, m_cursorTexture, nullptr, &dstRect);
+-}
+-
+-void MouseDriver::handle(
+-    std::uint16_t flags, std::uint16_t btnState, std::int16_t x, std::int16_t y)
+-{
+-    if (m_handlers.empty()) [[unlikely]]
+-        return;
+-
+-    MouseEvent e(flags, btnState, x, y);
+-    for (MouseHandler& handler : m_handlers) {
+-        handler(e);
+-        if (!e.propagation())
+-            break;
+-    }
+-}
+-
+-void MouseDriver::onMouseButtonEvent(const SDL_MouseButtonEvent& e)
+-{
+-    m_isTouchDevice = false;
+-
+-    const std::uint16_t mouseEventFlags =
+-        e.type == SDL_MOUSEBUTTONDOWN ? mousePressedFlags(e)
+-                                      : mouseReleasedFlags(e);
+-    if (!mouseEventFlags) [[unlikely]]
+-        return;
+-
+-    const MouseButton btn = mouseButton(e);
+-    if (btn == MouseButton::MB_NONE) [[unlikely]]
+-        return;
+-
+-    if (e.type == SDL_MOUSEBUTTONDOWN)
+-        m_mouseButtonState |= btn;
+-    else
+-        m_mouseButtonState &= (~btn);
+-
+-    handle(mouseEventFlags, m_mouseButtonState, e.x, e.y);
+-}
+-
+-void MouseDriver::onMouseMove(const SDL_MouseMotionEvent& e)
+-{
+-    m_isTouchDevice = false;
+-
+-    if (cursorVisible())
+-        Driver::instance().vga().requestScreenUpdate();
+-
+-    // limit mouse movement if the debug graphics is active
+-    const Sint32 x = std::min(e.x, LOGICAL_SCREEN_WIDTH);
+-    const Sint32 y = std::min(e.y, LOGICAL_SCREEN_HEIGHT);
+-
+-    // window is small => coordinates can't be large
+-    assert(x <= std::numeric_limits<std::int16_t>::max());
+-    assert(x >= std::numeric_limits<std::int16_t>::min());
+-    assert(y <= std::numeric_limits<std::int16_t>::max());
+-    assert(y >= std::numeric_limits<std::int16_t>::min());
+-
+-    handle(0, m_mouseButtonState, x, y);
+-
+-    m_cursorX = static_cast<int>(x);
+-    m_cursorY = static_cast<int>(y);
+-}
+-
+-void MouseDriver::onTouch(const SDL_TouchFingerEvent& e)
+-{
+-    m_isTouchDevice = true;
+-
+-    const int x = static_cast<int>(e.x * PHYSICAL_SCREEN_WIDTH);
+-    const int y = static_cast<int>(e.y * PHYSICAL_SCREEN_HEIGHT);
+-    switch (e.type) {
+-    case SDL_FINGERMOTION:
+-        m_touchHandler.onMove(x, y);
+-        break;
+-    case SDL_FINGERDOWN: {
+-        m_touchHandler.onPressStart(x, y);
+-        break;
+-    }
+-    case SDL_FINGERUP:
+-        m_touchHandler.onPressEnd();
+-        break;
+-    [[unlikely]] default:
+-        std::cerr << "Unexpected touch event, type = " << e.type << std::endl;
+-    }
+-}
+-
+-void MouseDriver::handleTouchAction(TouchHandler::Action action, int x, int y)
+-{
+-    switch (action) {
+-    case TouchHandler::Action::Tap:
+-        handle(ME_LEFTRELEASED, 0, x, y);
+-        break;
+-    case TouchHandler::Action::LongTap:
+-        handle(ME_RIGHTRELEASED, 0, x, y);
+-        break;
+-    case TouchHandler::Action::Swipe:
+-        handle(
+-            ME_LEFTPRESSED | ME_RIGHTPRESSED,
+-            MouseButton::MB_LEFT | MouseButton::MB_RIGHT, x, y);
+-        handle(ME_LEFTRELEASED | ME_RIGHTRELEASED, 0, x, y);
+-        break;
+-    }
+-}
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/mouse.h b/src/system/driver/sdl/mouse.h
+deleted file mode 100644
+index c0a0efb..0000000
+--- a/src/system/driver/sdl/mouse.h
++++ /dev/null
+@@ -1,94 +0,0 @@
+-#pragma once
+-
+-#include <SDL_events.h>
+-#include <SDL_render.h>
+-
+-// IWYU pragma: no_include "system/driver/sdl/touch_context.h"
+-#include "touch_context.h" // IWYU pragma: export
+-#include "touch_handler.h"
+-#include <system/mouse.h>
+-
+-#include <cstdint>
+-#include <list>
+-
+-namespace resl {
+-
+-class MouseDriver {
+-    using HandlerStorageT = std::list<MouseHandler>;
+-
+-public:
+-    class [[nodiscard]] HandlerHolder {
+-    public:
+-        HandlerHolder() noexcept;
+-        HandlerHolder(HandlerStorageT::iterator) noexcept;
+-        ~HandlerHolder();
+-
+-        HandlerHolder(HandlerHolder&&) noexcept;
+-        HandlerHolder& operator=(HandlerHolder&&) noexcept;
+-
+-        HandlerHolder(const HandlerHolder&) = delete;
+-        HandlerHolder& operator=(const HandlerHolder&) = delete;
+-
+-    private:
+-        HandlerStorageT::iterator m_iter;
+-    };
+-
+-    class [[nodiscard]] TouchContextProviderHolder {
+-    public:
+-        TouchContextProviderHolder(TouchHandler&);
+-        ~TouchContextProviderHolder();
+-
+-        TouchContextProviderHolder(const TouchContextProviderHolder&) = delete;
+-        TouchContextProviderHolder(TouchContextProviderHolder&&) = delete;
+-        TouchContextProviderHolder& operator=(const TouchContextProviderHolder&) = delete;
+-        TouchContextProviderHolder& operator=(TouchContextProviderHolder&&) = delete;
+-
+-    private:
+-        TouchHandler& m_touchHandler;
+-    };
+-
+-    MouseDriver(SDL_Renderer*);
+-    ~MouseDriver();
+-
+-    void setCursorVisibility(bool);
+-    bool cursorVisible() const noexcept;
+-
+-    int cursorX() const { return m_cursorX; }
+-    int cursorY() const { return m_cursorY; }
+-    void setPosition(int x, int y);
+-
+-    HandlerHolder addHandler(MouseHandler hdl);
+-    TouchContextProviderHolder setTouchContextProvider(TouchContextProvider&);
+-
+-    bool isTouchDevice() const noexcept { return m_isTouchDevice; }
+-
+-private:
+-    void handle(std::uint16_t flags, std::uint16_t btnState,
+-                std::int16_t x, std::int16_t y);
+-
+-    void onMouseButtonEvent(const SDL_MouseButtonEvent&);
+-    void onMouseMove(const SDL_MouseMotionEvent&);
+-    void onTouch(const SDL_TouchFingerEvent&);
+-
+-    void handleTouchAction(TouchHandler::Action, int x, int y);
+-
+-    bool updateAnimation();
+-    void drawCursor(SDL_Renderer*);
+-
+-    TouchHandler m_touchHandler;
+-
+-    HandlerStorageT m_handlers;
+-    std::uint16_t m_mouseButtonState;
+-
+-    int m_cursorX = 0;
+-    int m_cursorY = 0;
+-
+-    SDL_Texture* m_cursorTexture;
+-    bool m_isTouchDevice = true;
+-    bool m_cursorVisible = false;
+-
+-    friend class Driver;
+-    friend class VGAEmulation;
+-};
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/texture.cpp b/src/system/driver/sdl/texture.cpp
+deleted file mode 100644
+index c730e8f..0000000
+--- a/src/system/driver/sdl/texture.cpp
++++ /dev/null
+@@ -1,38 +0,0 @@
+-#include "texture.h"
+-
+-#include <SDL_image.h>
+-
+-#include <cstdlib>
+-#include <iostream>
+-#include <utility>
+-
+-namespace resl {
+-
+-Texture::Texture(SDL_Renderer* renderer, const char* filePath) noexcept
+-    : m_texture(IMG_LoadTexture(renderer, filePath))
+-{
+-    if (!m_texture) [[unlikely]] {
+-        std::cerr << "Unable to load the image \"" << filePath << '"' << std::endl;
+-        std::abort();
+-    }
+-}
+-
+-Texture::~Texture()
+-{
+-    if (m_texture)
+-        SDL_DestroyTexture(m_texture);
+-}
+-
+-Texture::Texture(Texture&& other) noexcept
+-    : m_texture(other.m_texture)
+-{
+-    other.m_texture = nullptr;
+-}
+-
+-Texture& Texture::operator=(Texture&& other) noexcept
+-{
+-    std::swap(m_texture, other.m_texture);
+-    return *this;
+-}
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/texture.h b/src/system/driver/sdl/texture.h
+deleted file mode 100644
+index 88c1410..0000000
+--- a/src/system/driver/sdl/texture.h
++++ /dev/null
+@@ -1,25 +0,0 @@
+-#pragma once
+-
+-#include <SDL_render.h>
+-
+-namespace resl {
+-
+-class Texture {
+-public:
+-    Texture() = default;
+-    Texture(SDL_Renderer*, const char*) noexcept;
+-    ~Texture();
+-
+-    Texture(const Texture&) = delete;
+-    Texture& operator=(const Texture&) = delete;
+-
+-    Texture(Texture&&) noexcept;
+-    Texture& operator=(Texture&&) noexcept;
+-
+-    operator SDL_Texture*() const noexcept { return m_texture; }
+-
+-private:
+-    SDL_Texture* m_texture = nullptr;
+-};
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/touch_context.h b/src/system/driver/sdl/touch_context.h
+deleted file mode 100644
+index e44c39f..0000000
+--- a/src/system/driver/sdl/touch_context.h
++++ /dev/null
+@@ -1,17 +0,0 @@
+-#pragma once
+-
+-namespace resl {
+-
+-enum class LongTouchAction {
+-    None,
+-    BuildRail,
+-    CallServer,
+-};
+-
+-class TouchContextProvider {
+-public:
+-    virtual LongTouchAction recognizeTouchAction(int x, int y) const = 0;
+-    virtual bool isSwipeAllowed() const = 0;
+-};
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/touch_handler.cpp b/src/system/driver/sdl/touch_handler.cpp
+deleted file mode 100644
+index bc1f12f..0000000
+--- a/src/system/driver/sdl/touch_handler.cpp
++++ /dev/null
+@@ -1,381 +0,0 @@
+-#include "touch_handler.h"
+-// IWYU pragma: no_include "system/driver/sdl/touch_context.h"
+-
+-#include "texture.h"
+-#include <graphics/vga.h>
+-
+-#include <SDL_error.h>
+-#include <SDL_timer.h>
+-
+-#include <algorithm>
+-#include <cassert>
+-#include <cmath>
+-#include <cstdlib>
+-#include <iostream>
+-#include <limits>
+-#include <utility>
+-
+-namespace resl {
+-
+-namespace {
+-
+-    constexpr char g_iconBuildRailPath[] = "build_rail_icon.png";
+-    constexpr char g_iconCallServerPath[] = "call_server_icon.png";
+-
+-    constexpr int g_r1 = 60;
+-    constexpr int g_r2 = 50;
+-
+-    constexpr int g_iconWidth = 64;
+-    constexpr int g_iconHeight = 64;
+-
+-    enum class IconPosition {
+-        Top,
+-        Left,
+-        Right
+-    };
+-
+-    IconPosition iconPosition(int x, int y)
+-    {
+-        if (y - g_r1 - g_iconHeight >= 0)
+-            return IconPosition::Top;
+-
+-        return x > PHYSICAL_SCREEN_WIDTH / 2 ? IconPosition::Left
+-                                             : IconPosition::Right;
+-    }
+-
+-    std::pair<int, int> iconOffset(int x, int y)
+-    {
+-        switch (iconPosition(x, y)) {
+-        case IconPosition::Top:
+-            return { -g_iconWidth / 2, -g_r1 - g_iconHeight };
+-        case IconPosition::Left:
+-            return { -g_r1 - g_iconWidth, -g_iconHeight / 2 };
+-        case IconPosition::Right:
+-            return { g_r1, -g_iconHeight / 2 };
+-        };
+-        [[unlikely]] std::abort(); // unreachable
+-    }
+-
+-} // namespace
+-
+-TouchHandler::TouchHandler(SDL_Renderer* renderer, LongPressHandlerT handler)
+-    : m_handler(std::move(handler))
+-{
+-    m_context.iconBuildRail = { renderer, g_iconBuildRailPath };
+-    m_context.iconCallServer = { renderer, g_iconCallServerPath };
+-    computePoints();
+-}
+-
+-void TouchHandler::onPressStart(int x, int y)
+-{
+-    if (!m_context.pressed) {
+-        m_context.pressed = true;
+-        m_lastFrameTime = SDL_GetTicks64();
+-    }
+-
+-    if (std::holds_alternative<WaitStage>(m_stage)) {
+-        moveTo(x, y);
+-        m_context.x = x;
+-        m_context.y = y;
+-    }
+-}
+-
+-void TouchHandler::onPressEnd()
+-{
+-    if (m_handler && m_context.pressed && std::holds_alternative<WaitStage>(m_stage))
+-        m_handler(Action::Tap, m_context.x, m_context.y);
+-    m_context.pressed = false;
+-    if (std::holds_alternative<FinishedStage>(m_stage))
+-        m_stage = WaitStage();
+-}
+-
+-void TouchHandler::onMove(int x, int y)
+-{
+-    const int dx = std::abs(x - m_context.x);
+-    const int dy = std::abs(y - m_context.y);
+-    const int distSqr = dx * dx + dy * dy;
+-    std::visit(
+-        [this, distSqr, x, y]<typename T>(T& s) {
+-            const bool allowSwipe =
+-                m_context.touchContextProvider && m_context.touchContextProvider->isSwipeAllowed();
+-            if constexpr (std::is_same_v<T, WaitStage>) {
+-                if (!allowSwipe)
+-                    return;
+-
+-                if (distSqr >= g_minSwipeDistance * g_minSwipeDistance) {
+-                    static_assert(g_maxSwipeTimeMs >= WaitStage::g_animationDelayMs);
+-                    if (m_handler)
+-                        m_handler(Action::Swipe, x, y);
+-                    m_stage = FinishedStage();
+-                } else if (distSqr > g_maxTapDistance * g_maxTapDistance) {
+-                    static_assert(g_maxSwipeTimeMs >= WaitStage::g_animationDelayMs);
+-                    m_stage = SwipeStage { s.m_time };
+-                }
+-            } else if constexpr (std::is_same_v<T, TimerStage>)
+-                m_context.pressed = distSqr <= g_maxTapDistance * g_maxTapDistance;
+-
+-            else if constexpr (std::is_same_v<T, SwipeStage>) {
+-                if (distSqr >= g_minSwipeDistance * g_minSwipeDistance) {
+-                    if (allowSwipe && m_handler)
+-                        m_handler(Action::Swipe, x, y);
+-                    m_stage = FinishedStage();
+-                }
+-            }
+-        },
+-        m_stage);
+-}
+-
+-bool TouchHandler::updateAnimation()
+-{
+-    Uint64 time = SDL_GetTicks64();
+-    int dTime = static_cast<int>(time - m_lastFrameTime);
+-    if (dTime == 0)
+-        return false;
+-    m_lastFrameTime = time;
+-
+-    std::optional<StageT> newStage =
+-        std::visit(
+-            [this, dTime](auto& stage) {
+-                return stage.update(dTime, m_context);
+-            },
+-            m_stage);
+-    const bool stageChanged = newStage != std::nullopt;
+-    if (stageChanged) {
+-        if (m_handler && std::holds_alternative<FinishedStage>(*newStage))
+-            m_handler(Action::LongTap, m_context.x, m_context.y);
+-        m_stage = std::move(*newStage);
+-    }
+-    return stageChanged || isAnimationVisible();
+-}
+-
+-void TouchHandler::draw(SDL_Renderer* renderer)
+-{
+-    std::visit(
+-        [this, renderer](auto& stage) {
+-            return stage.draw(renderer, m_context);
+-        },
+-        m_stage);
+-}
+-
+-bool TouchHandler::isAnimationVisible() const noexcept
+-{
+-    return std::visit(
+-        [](auto& stage) {
+-            return stage.isAnimationVisible();
+-        },
+-        m_stage);
+-}
+-
+-void TouchHandler::setTouchContextProvider(TouchContextProvider* tcp)
+-{
+-    m_context.touchContextProvider = tcp;
+-}
+-
+-std::optional<TouchHandler::StageT> TouchHandler::WaitStage::update(
+-    int dTime, AnimationContext& ctx)
+-{
+-    const LongTouchAction longTouchAction = ctx.touchContextProvider
+-        ? ctx.touchContextProvider->recognizeTouchAction(ctx.x, ctx.y)
+-        : LongTouchAction::None;
+-
+-    if (!ctx.pressed || longTouchAction == LongTouchAction::None) {
+-        m_time = 0;
+-        return std::nullopt;
+-    }
+-    m_time += dTime;
+-    if (m_time >= g_animationDelayMs) {
+-        ctx.curIcon = longTouchAction == LongTouchAction::BuildRail
+-            ? &ctx.iconBuildRail
+-            : &ctx.iconCallServer;
+-        return TimerStage();
+-    }
+-    return std::nullopt;
+-}
+-
+-std::optional<TouchHandler::StageT> TouchHandler::TimerStage::update(
+-    int dTime, AnimationContext& ctx)
+-{
+-    if (ctx.pressed) {
+-        m_angle += (3 * M_PI / g_fillTimeMs) * dTime;
+-        if (m_angle > 3 * M_PI)
+-            return ConfirmationStage();
+-    } else {
+-        m_angle -= (3 * M_PI / g_clearTimeMs) * dTime;
+-        if (m_angle <= 0)
+-            return WaitStage();
+-    }
+-
+-    if (m_angle - 2 * M_PI >= 0) {
+-        // entire circle
+-        m_nPoints = static_cast<int>(ctx.points.size());
+-        m_nIndices = static_cast<int>(ctx.indices.size());
+-    } else {
+-        const int steps = static_cast<int>(m_angle / g_angleStep);
+-        if (!steps)
+-            return std::nullopt;
+-
+-        m_nPoints = (steps + 1) * 2;
+-        assert(m_nPoints <= static_cast<int>(ctx.points.size()));
+-
+-        m_nIndices = steps * 6;
+-        assert(m_nIndices <= static_cast<int>(ctx.indices.size()));
+-    }
+-    fillColors(m_nPoints);
+-
+-    return std::nullopt;
+-}
+-
+-void TouchHandler::TimerStage::draw(SDL_Renderer* renderer, const AnimationContext& ctx)
+-{
+-    int res = SDL_RenderGeometryRaw(
+-        renderer, nullptr,
+-        reinterpret_cast<const float*>(ctx.points.data()), sizeof(ctx.points[0]),
+-        m_colors.data(), sizeof(m_colors[0]),
+-        nullptr, 0, m_nPoints,
+-        ctx.indices.data(), m_nIndices, sizeof(ctx.indices[0]));
+-    if (res) [[unlikely]]
+-        std::cerr << "SDL_RenderGeometryRaw failed: " << SDL_GetError() << std::endl;
+-
+-    const int adjX = adjustXForAnimation(ctx.x);
+-    const int adjY = adjustYForAnimation(ctx.y);
+-    const auto [iconXOffset, iconYOffset] = iconOffset(adjX, adjY);
+-
+-    SDL_Rect dstRect = { adjX + iconXOffset, adjY + iconYOffset, g_iconWidth, g_iconHeight };
+-    assert(ctx.curIcon);
+-    SDL_SetTextureAlphaMod(*ctx.curIcon, static_cast<Uint8>(200 * m_nPoints / ctx.points.size()));
+-    SDL_RenderCopy(renderer, *ctx.curIcon, nullptr, &dstRect);
+-}
+-
+-void TouchHandler::TimerStage::fillColors(int nPoints)
+-{
+-    assert(nPoints % 2 == 0);
+-    assert(static_cast<int>(m_colors.size()) >= nPoints * 2);
+-
+-    for (int i = 0; i < nPoints; i += 2) {
+-        int dist = nPoints - i;
+-        if (m_angle > 2 * M_PI)
+-            dist = std::min<int>(dist + (m_angle - 2 * M_PI) * 15, nPoints);
+-
+-        const int kStart = dist;
+-        const int kEnd = nPoints - dist;
+-
+-        std::uint8_t r = (g_startColor.r * kStart + g_endColor.r * kEnd) / nPoints;
+-        std::uint8_t g = (g_startColor.g * kStart + g_endColor.g * kEnd) / nPoints;
+-        std::uint8_t b = (g_startColor.b * kStart + g_endColor.b * kEnd) / nPoints;
+-        std::uint8_t a = (g_startColor.a * kStart + g_endColor.a * kEnd) / nPoints;
+-
+-        m_colors[i] = { r, g, b, a };
+-        m_colors[i + 1] = {
+-            static_cast<Uint8>(r * 4 / 5),
+-            static_cast<Uint8>(r * 4 / 5),
+-            static_cast<Uint8>(b * 4 / 5),
+-            a
+-        };
+-    }
+-}
+-
+-std::optional<TouchHandler::StageT> TouchHandler::ConfirmationStage::update(
+-    int dTime, AnimationContext&)
+-{
+-    m_time += dTime;
+-
+-    if (m_time > s_maxScaleTimeMs)
+-        return FinishedStage();
+-
+-    return std::nullopt;
+-}
+-
+-void TouchHandler::ConfirmationStage::draw(SDL_Renderer* renderer, const AnimationContext& ctx)
+-{
+-    // scale function: scale(x) = 1 - ((x - 100) ^ 2) / (200^2);
+-    const int x = m_time - 100;
+-    const float scale = 1 - x * x / (s_maxScaleTimeMs * s_maxScaleTimeMs);
+-
+-    const int width = g_iconWidth * scale;
+-    const int height = g_iconHeight * scale;
+-    const int adjX = adjustXForAnimation(ctx.x);
+-    const int adjY = adjustYForAnimation(ctx.y);
+-    const auto [iconXOffset, iconYOffset] = iconOffset(adjX, adjY);
+-    SDL_Rect dstRect = {
+-        static_cast<int>(adjX + iconXOffset * scale),
+-        static_cast<int>(adjY + iconYOffset * scale),
+-        width, height
+-    };
+-    assert(ctx.curIcon);
+-
+-    SDL_SetTextureAlphaMod(*ctx.curIcon, static_cast<Uint8>(200 * (s_maxScaleTimeMs - scale) / s_maxScaleTimeMs));
+-    SDL_RenderCopy(renderer, *ctx.curIcon, nullptr, &dstRect);
+-}
+-
+-std::optional<TouchHandler::StageT> TouchHandler::SwipeStage::update(
+-    int dTime, const AnimationContext&)
+-{
+-    m_time += dTime;
+-    if (m_time > g_maxSwipeTimeMs)
+-        return FinishedStage();
+-
+-    return std::nullopt;
+-}
+-
+-void TouchHandler::computePoints()
+-{
+-    static_assert(g_nSteps * 2 <= std::numeric_limits<std::uint8_t>::max());
+-    float angle = -M_PI / 2.0f;
+-
+-    m_context.x = g_r1;
+-    m_context.y = g_r1;
+-    for (int step = 0; step < g_nSteps; ++step, angle += g_angleStep) {
+-        const float cosVal = std::cos(angle);
+-        const float sinVal = std::sin(angle);
+-
+-        m_context.points[step * 2] = {
+-            cosVal * g_r1 + m_context.x, sinVal * g_r1 + m_context.y
+-        };
+-        m_context.points[step * 2 + 1] = {
+-            cosVal * g_r2 + m_context.x, sinVal * g_r2 + m_context.y
+-        };
+-    }
+-    m_context.points[g_nSteps * 2] = m_context.points[0];
+-    m_context.points[g_nSteps * 2 + 1] = m_context.points[1];
+-
+-    for (std::size_t i = 0; i < g_nSteps * 2; ++i) {
+-        m_context.indices[i * 3] = i;
+-        m_context.indices[i * 3 + 1] = i + 1;
+-        m_context.indices[i * 3 + 2] = i + 2;
+-    }
+-}
+-
+-void TouchHandler::moveTo(int x, int y)
+-{
+-    x = adjustXForAnimation(x);
+-    y = adjustYForAnimation(y);
+-    const int oldX = adjustXForAnimation(m_context.x);
+-    const int oldY = adjustYForAnimation(m_context.y);
+-
+-    const int dx = x - oldX;
+-    const int dy = y - oldY;
+-    for (SDL_FPoint& p : m_context.points) {
+-        p.x += dx;
+-        p.y += dy;
+-    }
+-}
+-
+-int TouchHandler::adjustXForAnimation(int x)
+-{
+-    if (x < g_r1)
+-        return g_r1;
+-    if (x > PHYSICAL_SCREEN_WIDTH - g_r1)
+-        return PHYSICAL_SCREEN_WIDTH - g_r1;
+-    return x;
+-}
+-
+-int TouchHandler::adjustYForAnimation(int y)
+-{
+-    if (y < g_r1)
+-        return g_r1;
+-    if (y > PHYSICAL_SCREEN_HEIGHT - g_r1)
+-        return PHYSICAL_SCREEN_HEIGHT - g_r1;
+-    return y;
+-}
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/touch_handler.h b/src/system/driver/sdl/touch_handler.h
+deleted file mode 100644
+index d8cb239..0000000
+--- a/src/system/driver/sdl/touch_handler.h
++++ /dev/null
+@@ -1,153 +0,0 @@
+-#pragma once
+-
+-#include "texture.h"
+-#include "touch_context.h"
+-#include <graphics/vga.h>
+-
+-#include <SDL_pixels.h>
+-#include <SDL_rect.h>
+-#include <SDL_render.h>
+-#include <SDL_stdinc.h>
+-
+-#include <array>
+-#include <cmath>
+-#include <cstdint>
+-#include <functional>
+-#include <optional>
+-#include <variant>
+-
+-namespace resl {
+-
+-class TouchHandler {
+-public:
+-    enum class Action {
+-        Tap,
+-        LongTap,
+-        Swipe
+-    };
+-
+-    using LongPressHandlerT = std::function<void(Action, int x, int y)>;
+-
+-    TouchHandler(SDL_Renderer*, LongPressHandlerT);
+-
+-    void onPressStart(int x, int y);
+-    void onPressEnd();
+-    void onMove(int x, int y);
+-
+-    bool updateAnimation();
+-    void draw(SDL_Renderer*);
+-
+-    void setTouchContextProvider(TouchContextProvider*);
+-
+-private:
+-    static constexpr int g_nSteps = 32;
+-    static constexpr float g_angleStep = 2 * M_PI / g_nSteps;
+-
+-    static constexpr SDL_Color g_startColor = { 0x55, 0x55, 0x55, 0xFF };
+-    static constexpr SDL_Color g_endColor = { 0xAA, 0xAA, 0xAA, 0x80 };
+-
+-    static constexpr int g_fillTimeMs = 700;
+-    static constexpr int g_clearTimeMs = 400;
+-
+-    static constexpr int g_maxTapDistance = LOGICAL_SCREEN_HEIGHT / 5;
+-    static constexpr int g_minSwipeDistance = LOGICAL_SCREEN_HEIGHT / 3;
+-    static constexpr int g_maxSwipeTimeMs = 500;
+-
+-    struct WaitStage;
+-    class TimerStage;
+-    class ConfirmationStage;
+-    struct SwipeStage;
+-    class FinishedStage;
+-
+-    using StageT = std::variant<
+-        WaitStage,
+-        TimerStage, ConfirmationStage, // long tap animation
+-        SwipeStage,
+-        FinishedStage>;
+-
+-    struct AnimationContext {
+-        bool pressed = false;
+-
+-        const Texture* curIcon = nullptr;
+-        Texture iconBuildRail;
+-        Texture iconCallServer;
+-
+-        std::array<SDL_FPoint, (g_nSteps + 1) * 2> points;
+-        std::array<std::uint8_t, g_nSteps * 3 * 2> indices;
+-
+-        TouchContextProvider* touchContextProvider = nullptr;
+-
+-        int x;
+-        int y;
+-    };
+-
+-    struct WaitStage {
+-        std::optional<StageT> update(int dTime, AnimationContext&);
+-        void draw(SDL_Renderer*, const AnimationContext&) { }
+-        bool isAnimationVisible() const noexcept { return false; }
+-
+-        static constexpr int g_animationDelayMs = 200;
+-        int m_time = 0;
+-    };
+-
+-    class TimerStage {
+-    public:
+-        std::optional<StageT> update(int dTime, AnimationContext&);
+-        void draw(SDL_Renderer*, const AnimationContext&);
+-        bool isAnimationVisible() const noexcept { return true; }
+-
+-    private:
+-        void fillColors(int nPoints);
+-
+-        int m_nPoints;
+-        int m_nIndices;
+-        std::array<SDL_Color, (g_nSteps + 1) * 4> m_colors;
+-        float m_angle = 0;
+-    };
+-
+-    class ConfirmationStage {
+-    public:
+-        std::optional<StageT> update(int dTime, AnimationContext&);
+-        void draw(SDL_Renderer*, const AnimationContext&);
+-        bool isAnimationVisible() const noexcept { return true; }
+-
+-    private:
+-        static constexpr float s_maxScaleTimeMs = 200;
+-
+-        int m_time = 0;
+-    };
+-
+-    struct SwipeStage {
+-        std::optional<StageT> update(int dTime, const AnimationContext&);
+-        void draw(SDL_Renderer*, const AnimationContext&) { }
+-        bool isAnimationVisible() const noexcept { return false; }
+-
+-        int m_time;
+-    };
+-
+-    class FinishedStage {
+-    public:
+-        std::optional<StageT> update(int /*dTime*/, const AnimationContext&)
+-        {
+-            return std::nullopt;
+-        }
+-        void draw(SDL_Renderer*, const AnimationContext&) { }
+-        bool isAnimationVisible() const noexcept { return false; }
+-    };
+-
+-    bool isAnimationVisible() const noexcept;
+-
+-    void computePoints();
+-    void moveTo(int x, int y);
+-
+-    static int adjustXForAnimation(int);
+-    static int adjustYForAnimation(int);
+-
+-    AnimationContext m_context;
+-    StageT m_stage = WaitStage();
+-    LongPressHandlerT m_handler;
+-
+-    Uint64 m_lastFrameTime = 0;
+-};
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/video.cpp b/src/system/driver/sdl/video.cpp
+deleted file mode 100644
+index ab0afc8..0000000
+--- a/src/system/driver/sdl/video.cpp
++++ /dev/null
+@@ -1,551 +0,0 @@
+-#include "video.h"
+-
+-#include "graphics/vga.h"
+-#include "system/driver/sdl/driver.h"
+-#include "system/driver/sdl/mouse.h"
+-
+-#include <SDL_blendmode.h>
+-#include <SDL_error.h>
+-#include <SDL_hints.h>
+-#include <SDL_mouse.h>
+-#include <SDL_pixels.h>
+-#include <SDL_rect.h>
+-
+-#include <algorithm>
+-#include <array>
+-#include <cassert>
+-#include <compare>
+-#include <cstdint>
+-#include <cstdlib>
+-#include <cstring>
+-#include <iostream>
+-#include <iterator>
+-#include <limits>
+-
+-#ifdef __EMSCRIPTEN__
+-#   include <emscripten.h>
+-#else
+-#   include <thread>
+-#endif // __EMSCRIPTEN__
+-
+-namespace resl {
+-
+-// https://www.cs.utexas.edu/~lorenzo/corsi/439/ref/hardware/vgadoc/VGAREGS.TXT
+-
+-static const char g_windowTitle[] = "reSL - reverse engineered ShortLine game";
+-
+-static constexpr Uint32 g_supportedPixelFormats[] = {
+-    SDL_PIXELFORMAT_ARGB8888,
+-    SDL_PIXELFORMAT_ABGR8888,
+-    SDL_PIXELFORMAT_RGBA8888,
+-    SDL_PIXELFORMAT_BGRA8888,
+-};
+-
+-VGAEmulation::VGAEmulation()
+-{
+-    init();
+-}
+-
+-VGAEmulation::~VGAEmulation()
+-{
+-    close();
+-}
+-
+-void VGAEmulation::flush()
+-{
+-    const ClockT::time_point now = ClockT::now();
+-    if (now < m_nextFrameTime)
+-        return;
+-    m_nextFrameTime = now + std::chrono::microseconds(1000000 / s_FPS);
+-
+-    bool mouseAnimationUpdated = Driver::instance().mouse().updateAnimation();
+-    if (updatePicture() || m_needRedraw || mouseAnimationUpdated) {
+-        m_needRedraw = false;
+-
+-        SDL_SetRenderDrawColor(m_renderer, 0x00, 0x00, 0x00, 0xFF);
+-        SDL_RenderClear(m_renderer);
+-        SDL_SetRenderDrawColor(m_renderer, 0x55, 0xAA, 0x00, 0xFF);
+-        const SDL_Rect screenRect = { 0, 0, m_wndWidth, m_wndHeight };
+-        SDL_RenderFillRect(m_renderer, &screenRect);
+-
+-        const auto drawOverlays = [this](int yOffset) {
+-            for (Overlay& ov : m_overlays)
+-                ov(m_renderer, yOffset);
+-        };
+-
+-        const bool splitScreen = m_vgaState.overflowLineCompare < LOGICAL_SCREEN_HEIGHT;
+-
+-        if (isDebugMode()) [[unlikely]] {
+-            drawOverlays(splitScreen ? m_vgaState.overflowLineCompare : 0);
+-
+-            SDL_Rect srcRect = { 0, 0, m_wndWidth, m_wndHeight };
+-            SDL_RenderCopy(m_renderer, m_screen, &srcRect, nullptr);
+-
+-            SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_MUL);
+-            SDL_SetRenderDrawColor(m_renderer, 51, 204, 204, 255);
+-            SDL_Rect frameRect = {
+-                0, m_vgaState.yOrigin,
+-                m_wndWidth, std::min<int>(m_vgaState.overflowLineCompare, LOGICAL_SCREEN_HEIGHT)
+-            };
+-            SDL_RenderDrawRect(m_renderer, &frameRect);
+-
+-            if (splitScreen) {
+-                SDL_SetRenderDrawColor(m_renderer, 153, 204, 0, 255);
+-                frameRect = {
+-                    0, 0,
+-                    m_wndWidth, LOGICAL_SCREEN_HEIGHT - m_vgaState.overflowLineCompare
+-                };
+-                SDL_RenderDrawRect(m_renderer, &frameRect);
+-            }
+-
+-        } else {
+-            const int overflowLinePhysicalY =
+-                m_vgaState.overflowLineCompare * m_wndHeight / LOGICAL_SCREEN_HEIGHT;
+-
+-            drawOverlays(splitScreen ? overflowLinePhysicalY : 0);
+-
+-            if (splitScreen) {
+-                SDL_Rect clipRect = { 0, 0, m_wndWidth, overflowLinePhysicalY };
+-                SDL_RenderSetClipRect(m_renderer, &clipRect);
+-            }
+-
+-            SDL_Rect srcRect = { 0, m_vgaState.yOrigin, LOGICAL_SCREEN_WIDTH, LOGICAL_SCREEN_HEIGHT };
+-            SDL_RenderCopy(m_renderer, m_screen, &srcRect, nullptr);
+-
+-            SDL_RenderSetClipRect(m_renderer, nullptr);
+-
+-            if (splitScreen) {
+-                srcRect = {
+-                    0, 0,
+-                    LOGICAL_SCREEN_WIDTH, LOGICAL_SCREEN_HEIGHT - m_vgaState.overflowLineCompare
+-                };
+-                SDL_Rect dstRect = {
+-                    0, overflowLinePhysicalY,
+-                    m_wndWidth,
+-                    m_wndHeight - overflowLinePhysicalY
+-                };
+-                SDL_RenderCopy(m_renderer, m_screen, &srcRect, &dstRect);
+-            }
+-        }
+-
+-        Driver::instance().mouse().drawCursor(m_renderer);
+-        SDL_RenderPresent(m_renderer);
+-
+-        m_dirtyRect = {};
+-    }
+-
+-    // need to poll events to make the image appear
+-    Driver::instance().pollEvent();
+-}
+-
+-void VGAEmulation::waitVerticalRetrace()
+-{
+-    const ClockT::time_point now = ClockT::now();
+-    if (now < m_nextFrameTime) {
+-#ifdef __EMSCRIPTEN__
+-        emscripten_sleep(
+-            std::chrono::duration_cast<std::chrono::milliseconds>(m_nextFrameTime - now).count());
+-#else
+-        std::this_thread::sleep_for(m_nextFrameTime - now);
+-#endif
+-    }
+-    flush();
+-}
+-
+-void VGAEmulation::setDebugMode(bool debug)
+-{
+-    if (debug) {
+-        m_wndWidth = vga::VIDEO_MEM_ROW_BYTES * 8;
+-        m_wndHeight = vga::VIDEO_MEM_N_ROWS;
+-    } else {
+-        m_wndWidth = LOGICAL_SCREEN_WIDTH;
+-        m_wndHeight = LOGICAL_SCREEN_HEIGHT;
+-    }
+-    SDL_SetWindowSize(m_window, m_wndWidth, m_wndHeight);
+-    if (SDL_RenderSetLogicalSize(m_renderer, m_wndWidth, m_wndHeight) != 0) [[unlikely]] {
+-        std::cerr << "SDL_RenderSetLogicalSize failed: " << SDL_GetError() << std::endl;
+-        close();
+-        std::exit(EXIT_FAILURE);
+-    }
+-}
+-
+-void VGAEmulation::setFullscreenMode(bool fullscreen)
+-{
+-    SDL_SetWindowFullscreen(m_window, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+-}
+-
+-void VGAEmulation::init()
+-{
+-#if defined(__APPLE__) && !defined(IOS)
+-    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+-#endif // __APPLE__
+-
+-    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+-
+-    Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI;
+-#ifndef __EMSCRIPTEN__
+-    flags |= SDL_WINDOW_RESIZABLE;
+-#endif // !__EMSCRIPTEN__
+-    int err = SDL_CreateWindowAndRenderer(
+-        m_wndWidth, m_wndHeight, flags, &m_window, &m_renderer);
+-    if (err) [[unlikely]] {
+-        std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
+-        close();
+-        std::exit(EXIT_FAILURE);
+-    }
+-
+-    if (SDL_RenderSetLogicalSize(m_renderer, m_wndWidth, m_wndHeight) != 0) [[unlikely]] {
+-        std::cerr << "SDL_RenderSetLogicalSize failed: " << SDL_GetError() << std::endl;
+-        close();
+-        std::exit(EXIT_FAILURE);
+-    }
+-    SDL_SetWindowTitle(m_window, g_windowTitle);
+-    SDL_WarpMouseInWindow(m_window, PHYSICAL_SCREEN_WIDTH / 2, PHYSICAL_SCREEN_HEIGHT / 2);
+-
+-    m_pixelFormat = choosePixelFormat();
+-    std::cout << "Pixel format: " << SDL_GetPixelFormatName(m_pixelFormat)
+-              << std::endl;
+-    generatePalette();
+-
+-    // roundUp(memSize / vgaRowBytes)
+-    constexpr int nRows =
+-        1 + (sizeof(VGAState::mem) / sizeof(VGAState::mem[0]) - 1) / vga::VIDEO_MEM_ROW_BYTES;
+-    m_screen = SDL_CreateTexture(
+-        m_renderer, m_pixelFormat, SDL_TEXTUREACCESS_STREAMING,
+-        vga::VIDEO_MEM_ROW_BYTES * 8, nRows);
+-    SDL_SetTextureBlendMode(m_screen, SDL_BLENDMODE_BLEND);
+-    if (!m_screen) [[unlikely]] {
+-        std::cerr << "Unable to create SDL texture! SDL_Error: " << SDL_GetError() << std::endl;
+-        close();
+-        std::exit(EXIT_FAILURE);
+-    }
+-
+-    SDL_SetRenderTarget(m_renderer, nullptr);
+-}
+-
+-void VGAEmulation::close()
+-{
+-    if (m_screen)
+-        SDL_DestroyTexture(m_screen);
+-    if (m_renderer)
+-        SDL_DestroyRenderer(m_renderer);
+-
+-    m_renderer = nullptr;
+-    m_window = nullptr;
+-    m_screen = nullptr;
+-}
+-
+-Uint32 VGAEmulation::choosePixelFormat()
+-{
+-    SDL_RendererInfo rInfo;
+-    if (SDL_GetRendererInfo(m_renderer, &rInfo)) [[unlikely]] {
+-        std::cerr << "WARNING: SDL_GetRendererInfo failed. SDL_Error: " << SDL_GetError()
+-                  << "\nWill use the default pixel format" << std::endl;
+-        return g_supportedPixelFormats[0];
+-    }
+-
+-    std::cout << "Renderer: " << rInfo.name << "\nSupported pixel formats:\n";
+-    for (Uint32 i = 0; i < rInfo.num_texture_formats; ++i) {
+-        std::cout << '\t'
+-                  << SDL_GetPixelFormatName(rInfo.texture_formats[i])
+-                  << std::endl;
+-    }
+-    auto iter = std::find_first_of(
+-        rInfo.texture_formats, rInfo.texture_formats + rInfo.num_texture_formats,
+-        std::begin(g_supportedPixelFormats), std::end(g_supportedPixelFormats));
+-    if (iter != rInfo.texture_formats + rInfo.num_texture_formats)
+-        return *iter;
+-
+-    std::cerr << "WARNING: no one preferred pixel format suits, "
+-                 "the default format will be used instead"
+-              << std::endl;
+-    return g_supportedPixelFormats[0];
+-}
+-
+-void VGAEmulation::generatePalette()
+-{
+-    assert(std::find(
+-               std::begin(g_supportedPixelFormats),
+-               std::end(g_supportedPixelFormats),
+-               m_pixelFormat) != std::end(g_supportedPixelFormats));
+-
+-    m_vgaState.palette = {
+-        0x0055AA00, // Green (transparent to be able to draw on the background)
+-        0xFF000000, // Black
+-        0xFFAAAAAA, // Gray
+-        0xFF555555, // Dark gray
+-        0xFFFFFFFF, // White
+-        0xFFFFFF55, // Yellow
+-        0xFFAAAA00, // Brown
+-        0xFF0055FF, // Blue
+-        0xFF0055AA, // Dark blue
+-        0xFFFF5500, // Red
+-        0xFFAA5500, // Dark red
+-        0xFF1AFFFF, // Cyan
+-        0xFF00AAAA, // Dark cyan
+-        0xFF00FF00, // Light green
+-        0xFF00AA00, // Dark green
+-        0xFFFFFFFF  // Blinking color (Black/White)
+-    };
+-
+-    if (m_pixelFormat == SDL_PIXELFORMAT_ARGB8888)
+-        return;
+-
+-    for (std::uint32_t& v : m_vgaState.palette)
+-        v = argbToPreferred(v);
+-}
+-
+-std::uint32_t VGAEmulation::argbToPreferred(std::uint32_t argb) const
+-{
+-    if (m_pixelFormat == SDL_PIXELFORMAT_ARGB8888)
+-        return argb;
+-
+-    std::uint32_t c = argb & 0xFFFFFF;
+-    if (m_pixelFormat == SDL_PIXELFORMAT_ABGR8888 ||
+-        m_pixelFormat == SDL_PIXELFORMAT_BGRA8888) {
+-
+-        // RGB -> BGR
+-        c = (c & 0xFF) << 16 | (c & 0xFF00) | (c >> 16);
+-    }
+-
+-    // add alpha value
+-    if (m_pixelFormat == SDL_PIXELFORMAT_ABGR8888)
+-        return (argb & 0xFF000000) | c;
+-
+-    if (m_pixelFormat == SDL_PIXELFORMAT_RGBA8888 ||
+-        m_pixelFormat == SDL_PIXELFORMAT_BGRA8888) {
+-
+-        return (c << 8) | (argb >> 24);
+-    }
+-
+-    // unreachable
+-    std::cerr << "FATAL: Unsupported pixel format "
+-              << SDL_GetPixelFormatName(m_pixelFormat) << std::endl;
+-    std::abort();
+-}
+-
+-// Decompose the bits of a byte into bytes of a 64-bit value.
+-//
+-// e.g
+-// 0b10011010 -> { 0x80 0x00 0x00 0x80 0x80 0x00 0x80 0x00 }
+-inline std::uint64_t spreadPlaneByte(std::uint8_t b)
+-{
+-    // Multiplication by 0x8040201008040201ULL creates shifted copies of b at
+-    // bit offsets 0, 9, 18, ..., 63. Masking with 0x8080808080808080ULL keeps
+-    // only one selected bit in each output byte:
+-    //
+-    //   byte0 <- b7, byte1 <- b6, ..., byte7 <- b0
+-    //
+-    // The selected bit remains in the MSB position of each byte.
+-    return (static_cast<std::uint64_t>(b) * 0x8040201008040201ULL) & 0x8080808080808080ULL;
+-}
+-
+-bool VGAEmulation::updatePicture()
+-{
+-    SDL_Rect screenRect = { 0, 0, m_wndWidth, vga::VIDEO_MEM_N_ROWS };
+-    SDL_IntersectRect(&m_dirtyRect, &screenRect, &m_dirtyRect);
+-    if (SDL_RectEmpty(&m_dirtyRect))
+-        return false;
+-
+-    // we unpack the picture by 8-pixel blocks => expand the dirty rect to block boundaries
+-    assert(m_wndWidth % 8 == 0);
+-    const int right = m_dirtyRect.x + m_dirtyRect.w;
+-    m_dirtyRect.x &= ~7;
+-    m_dirtyRect.w = ((right + 7) & ~7) - m_dirtyRect.x;
+-
+-    std::uint32_t* dst = nullptr;
+-    int pitch = 0;
+-    int err = SDL_LockTexture(m_screen, &m_dirtyRect, reinterpret_cast<void**>(&dst), &pitch);
+-    if (err) [[unlikely]] {
+-        std::cerr << "Unable to lock the texture! SDL_Error: " << SDL_GetError() << std::endl;
+-        std::exit(EXIT_FAILURE);
+-    }
+-    assert(dst);
+-    assert(pitch);
+-    assert(pitch % sizeof(std::uint32_t) == 0);
+-    pitch /= sizeof(std::uint32_t);
+-
+-    assert(m_dirtyRect.x % 8 == 0);
+-    std::size_t srcByte =
+-        m_dirtyRect.y * vga::VIDEO_MEM_ROW_BYTES + m_dirtyRect.x / 8;
+-    const int groups = m_dirtyRect.w / 8;
+-    for (int y = 0; y < m_dirtyRect.h; ++y) {
+-        for (int g = 0; g < groups; ++g) {
+-            // unpack 8 pixels
+-            assert(srcByte + g < 0x10000);
+-            const std::uint8_t* planes = m_vgaState.mem[srcByte + g];
+-            std::uint64_t pixels =
+-                spreadPlaneByte(planes[0]) >> 7 |
+-                spreadPlaneByte(planes[1]) >> 6 |
+-                spreadPlaneByte(planes[2]) >> 5 |
+-                spreadPlaneByte(planes[3]) >> 4;
+-
+-#pragma unroll
+-            for (int p = 0; p < 8; ++p) {
+-                dst[g * 8 + p] = m_vgaState.palette[pixels & 0xF];
+-                pixels >>= 8;
+-            }
+-        }
+-        dst += pitch;
+-        srcByte += vga::VIDEO_MEM_ROW_BYTES;
+-    }
+-
+-    SDL_UnlockTexture(m_screen);
+-    return true;
+-}
+-
+-void VGAEmulation::updateVideoMemory(unsigned srcByte)
+-{
+-    const int x = (srcByte * 8) % (vga::VIDEO_MEM_ROW_BYTES * 8);
+-    const int y = (srcByte * 8) / (vga::VIDEO_MEM_ROW_BYTES * 8);
+-
+-    if (x >= m_wndWidth)
+-        return;
+-
+-    SDL_Rect r = { x, y, 8, 1 };
+-    SDL_UnionRect(&m_dirtyRect, &r, &m_dirtyRect);
+-}
+-
+-void VGAEmulation::write(vga::VideoMemPtr memPtr, std::uint8_t color)
+-{
+-    unsigned offset = memPtr - vga::VIDEO_MEM_START_ADDR;
+-
+-    bool changed = false;
+-
+-    switch (m_vgaState.writeMode) {
+-    case 0:
+-        if (m_vgaState.regPlaneMask && m_vgaState.writeMask) {
+-            // rotation and logical operations are not used in SL
+-            // => not implemented here
+-            const std::uint8_t mask = m_vgaState.writeMask;
+-            for (int plane = 0; plane < 4; ++plane) {
+-                if (!(m_vgaState.regPlaneMask & (1 << plane)))
+-                    continue;
+-                std::uint8_t& v = m_vgaState.mem[offset][plane];
+-                v = (v & ~mask) | (mask & color);
+-            }
+-            changed = true;
+-        }
+-        break;
+-    case 1:
+-        std::memcpy(&m_vgaState.mem[offset], &m_vgaState.latches,
+-                    sizeof(m_vgaState.latches));
+-        changed = true;
+-        break;
+-
+-    case 2:
+-        if (m_vgaState.writeMask) {
+-            const std::uint8_t mask = m_vgaState.writeMask;
+-            for (int plane = 0; plane < 4; ++plane) {
+-                std::uint8_t& v = m_vgaState.mem[offset][plane];
+-
+-                std::uint8_t bitsToSet = mask * (color & 1);
+-                switch (m_vgaState.writeOperation) {
+-                case vga::WriteOperation::Copy:
+-                    break;
+-                case vga::WriteOperation::And:
+-                    bitsToSet &= v;
+-                    break;
+-                case vga::WriteOperation::Or:
+-                    bitsToSet |= v;
+-                    break;
+-                case vga::WriteOperation::Xor:
+-                    bitsToSet ^= v;
+-                    break;
+-                }
+-                v = (v & ~mask) | bitsToSet;
+-                color >>= 1;
+-            }
+-            changed = true;
+-        }
+-        break;
+-    };
+-
+-    if (changed)
+-        updateVideoMemory(offset);
+-}
+-
+-[[nodiscard]] std::uint8_t VGAEmulation::read(vga::VideoMemPtr memPtr)
+-{
+-    unsigned offset = memPtr - vga::VIDEO_MEM_START_ADDR;
+-
+-    std::memcpy(&m_vgaState.latches, &m_vgaState.mem[offset], sizeof(m_vgaState.latches));
+-
+-    // SL uses only read mode 0, so all other modes are not implemented
+-    assert(m_vgaState.readMode == 0);
+-
+-    return m_vgaState.mem[offset][m_vgaState.readPlane];
+-}
+-
+-void VGAEmulation::setWriteMask(std::uint8_t mask)
+-{
+-    m_vgaState.writeMask = mask;
+-}
+-
+-std::uint8_t VGAEmulation::writeMode()
+-{
+-    return m_vgaState.writeMode;
+-}
+-
+-void VGAEmulation::setMode(std::uint8_t mode)
+-{
+-    m_vgaState.writeMode = mode & 3;
+-    m_vgaState.readMode = (mode >> 2) & 1;
+-}
+-
+-void VGAEmulation::setLineCompareRegister(std::uint16_t y)
+-{
+-    // line compare register has 9 bits
+-    y = y & 0x1FF;
+-    if (m_vgaState.overflowLineCompare != y) {
+-        m_vgaState.overflowLineCompare = y;
+-        m_needRedraw = true;
+-    }
+-}
+-
+-void VGAEmulation::setFrameOrigin([[maybe_unused]] std::int16_t x, std::int16_t y)
+-{
+-    assert(x == 0); // not supported
+-    if (m_vgaState.yOrigin != y) {
+-        m_vgaState.yOrigin = y;
+-        m_needRedraw = true;
+-    }
+-}
+-
+-void VGAEmulation::setPlaneMask(std::uint8_t mask)
+-{
+-    m_vgaState.regPlaneMask = mask;
+-}
+-
+-void VGAEmulation::setReadPlane(std::uint8_t p)
+-{
+-    m_vgaState.readPlane = p;
+-}
+-
+-void VGAEmulation::setWriteOperation(vga::WriteOperation op)
+-{
+-    m_vgaState.writeOperation = op;
+-}
+-
+-void VGAEmulation::setPaletteItem(std::uint8_t idx, std::uint32_t argb)
+-{
+-    assert(idx < m_vgaState.palette.size());
+-    const std::uint32_t newColor = argbToPreferred(argb);
+-    if (newColor != m_vgaState.palette[idx]) {
+-        m_vgaState.palette[idx] = newColor;
+-        m_dirtyRect = { 0, 0, m_wndWidth, vga::VIDEO_MEM_N_ROWS };
+-    }
+-}
+-
+-unsigned VGAEmulation::timeToNextFrameMS() const
+-{
+-    const ClockT::time_point now = ClockT::now();
+-    if (now >= m_nextFrameTime)
+-        return 0;
+-
+-    const auto dTime = m_nextFrameTime - now;
+-    return static_cast<unsigned>(
+-        std::chrono::duration_cast<std::chrono::milliseconds>(dTime).count());
+-}
+-
+-} // namespace resl
+diff --git a/src/system/driver/sdl/video.h b/src/system/driver/sdl/video.h
+deleted file mode 100644
+index d575db2..0000000
+--- a/src/system/driver/sdl/video.h
++++ /dev/null
+@@ -1,144 +0,0 @@
+-#pragma once
+-
+-#include <graphics/vga.h>
+-
+-#include <SDL_rect.h>
+-#include <SDL_render.h>
+-#include <SDL_stdinc.h>
+-#include <SDL_video.h>
+-
+-#include <array>
+-#include <chrono>
+-#include <cstdint>
+-#include <functional>
+-#include <utility>
+-#include <vector>
+-
+-namespace resl {
+-
+-using Overlay = std::function<void(SDL_Renderer*, int yOffset)>;
+-
+-class VGAEmulation {
+-public:
+-    VGAEmulation();
+-    ~VGAEmulation();
+-
+-    VGAEmulation(const VGAEmulation&) = delete;
+-    VGAEmulation& operator=(const VGAEmulation&) = delete;
+-
+-    void requestScreenUpdate() { m_needRedraw = true; }
+-
+-    void flush();
+-    void waitVerticalRetrace();
+-
+-    void setDebugMode(bool debug);
+-    bool isDebugMode() const { return m_wndWidth != PHYSICAL_SCREEN_WIDTH; };
+-    void setFullscreenMode(bool fullscreen);
+-
+-    [[nodiscard]] std::uint8_t read(vga::VideoMemPtr);
+-    void write(vga::VideoMemPtr, std::uint8_t color);
+-
+-    void setWriteMask(std::uint8_t);
+-
+-    [[nodiscard]] std::uint8_t writeMode();
+-    void setMode(std::uint8_t);
+-
+-    void setPlaneMask(std::uint8_t);
+-    void setReadPlane(std::uint8_t);
+-    void setWriteOperation(vga::WriteOperation);
+-
+-    // 3d4h index  7  (R/W):  CRTC: Overflow Register
+-    // 4  Bit 8 of Line Compare Register (3d4h index 18h)
+-    void setLineCompareRegister(std::uint16_t);
+-
+-    // 3d4h index  Ch (R/W):  CRTC: Start Address High Register
+-    // bit 0-7  Upper 8 bits of the start address of the display buffer
+-    void setFrameOrigin(std::int16_t x, std::int16_t y);
+-
+-    void setPaletteItem(std::uint8_t idx, std::uint32_t argb);
+-
+-    unsigned timeToNextFrameMS() const;
+-
+-    void addOverlay(Overlay ov)
+-    {
+-        m_overlays.push_back(std::move(ov));
+-    }
+-
+-    Uint32 preferredPixelFormat() const { return m_pixelFormat; }
+-
+-    SDL_Renderer* renderer() const noexcept { return m_renderer; }
+-
+-private:
+-    static constexpr int s_FPS = 60;
+-
+-    using ClockT = std::chrono::steady_clock;
+-
+-    struct VGAState {
+-        std::uint8_t latches[4] = {};
+-
+-        // 3CEh index 8
+-        std::uint8_t writeMask = 0;
+-        std::uint8_t writeMode = 2;
+-
+-        vga::WriteOperation writeOperation = vga::WriteOperation::Copy;
+-
+-        /* Read Mode
+-         0: Data is read from one of 4 bit planes depending on the Read Map
+-            Select Register (3CEh index 4).
+-         1: Data returned is a comparison between the 8 pixels occupying the
+-            read byte and the color in the Color Compare Register (3CEh
+-            index 2). A bit is set if the color of the corresponding pixel
+-            matches the register. */
+-        std::uint8_t readMode = 0;
+-
+-        // 3CEh index  4  (R/W):  Graphics: Read Map Select Register
+-        // bit 0-1  Number of the plane Read Mode 0 will read from.
+-        std::uint8_t readPlane = 0;
+-
+-        // 3C4h index 2 (Color Plane Write Enable Register)
+-        std::uint8_t regPlaneMask = 0xF;
+-
+-        // 3d4h index  7  (R/W):  CRTC: Overflow Register
+-        // 4  Bit 8 of Line Compare Register (3d4h index 18h)
+-        std::uint16_t overflowLineCompare = 0;
+-
+-        // 3d4h index  Ch (R/W):  CRTC: Start Address High Register
+-        // bit 0-7  Upper 8 bits of the start address of the display buffer
+-        std::int16_t yOrigin = 0;
+-
+-        std::array<std::uint32_t, 16> palette;
+-
+-        std::uint8_t mem[0x10000][4];
+-    };
+-
+-    void init();
+-    void close();
+-
+-    Uint32 choosePixelFormat();
+-    void generatePalette();
+-    std::uint32_t argbToPreferred(std::uint32_t) const;
+-
+-    void updateVideoMemory(unsigned);
+-    bool updatePicture();
+-
+-    std::vector<Overlay> m_overlays;
+-
+-    SDL_Window* m_window = nullptr;
+-    SDL_Renderer* m_renderer = nullptr;
+-    SDL_Texture* m_screen = nullptr;
+-
+-    int m_wndWidth = PHYSICAL_SCREEN_WIDTH;
+-    int m_wndHeight = PHYSICAL_SCREEN_HEIGHT;
+-
+-    VGAState m_vgaState;
+-    Uint32 m_pixelFormat = 0;
+-
+-    ClockT::time_point m_nextFrameTime = {};
+-
+-    SDL_Rect m_dirtyRect = {};
+-    bool m_needRedraw = false;
+-
+-    friend class MouseDriver;
+-};
+-
+-} // namespace resl
+diff --git a/src/system/file.cpp b/src/system/file.cpp
+index 093f3c9..1a3bab9 100644
+--- a/src/system/file.cpp
++++ b/src/system/file.cpp
+@@ -1,9 +1,10 @@
+ #include "file.h"
+ 
+-#include <SDL_rwops.h>
+ 
+ #include <algorithm>
+ #include <cassert>
++#include <cstdio>
++#include <cstring>
+ #include <cstddef>
+ #include <utility>
+ 
+@@ -41,14 +42,21 @@ File& File::operator=(File&& other) noexcept
+ void File::open(const char* fileName, const char* mode) noexcept
+ {
+     close();
+-    m_ops = SDL_RWFromFile(fileName, mode);
++    {
++        // SDL_RWFromFile always opens files in binary mode
++        char m[8] = {};
++        std::snprintf(m, sizeof(m), "%sb", mode);
++        if (std::strchr(mode, 'b'))
++            std::snprintf(m, sizeof(m), "%s", mode);
++        m_ops = std::fopen(fileName, m);
++    }
+     m_failBit = !m_ops;
+ }
+ 
+ void File::close() noexcept
+ {
+     if (m_ops) {
+-        SDL_RWclose(m_ops);
++        std::fclose(m_ops);
+         m_ops = nullptr;
+     }
+     clear();
+@@ -69,7 +77,7 @@ std::size_t File::read(void* dst, std::size_t nBytes) noexcept
+     std::size_t totalRead = 0;
+     char* ptr = static_cast<char*>(dst);
+     while (totalRead < nBytes) {
+-        std::size_t read = SDL_RWread(m_ops, ptr, 1, nBytes);
++        std::size_t read = std::fread(ptr, 1, nBytes, m_ops);
+         if (read == 0) {
+             m_eofBit = true;
+             m_failBit = true;
+@@ -98,7 +106,7 @@ std::size_t File::write(const void* data, std::size_t nBytes) noexcept
+         return 0;
+ 
+     const std::size_t written =
+-        SDL_RWwrite(m_ops, data, 1, nBytes);
++        std::fwrite(data, 1, nBytes, m_ops);
+     if (written != nBytes) [[unlikely]]
+         m_badBit = true;
+     return written;
+@@ -110,8 +118,7 @@ bool File::seek(pos_type pos) noexcept
+         return false;
+ 
+     m_eofBit = false;
+-    Sint64 res = SDL_RWseek(m_ops, pos, RW_SEEK_SET);
+-    if (res != pos) [[unlikely]] {
++    if (std::fseek(m_ops, static_cast<long>(pos), SEEK_SET) != 0) [[unlikely]] {
+         m_failBit = true;
+         return false;
+     }
+@@ -122,7 +129,7 @@ File::pos_type File::tell() const noexcept
+ {
+     if (fail()) [[unlikely]]
+         return static_cast<pos_type>(-1);
+-    return SDL_RWtell(m_ops);
++    return std::ftell(m_ops);
+ }
+ 
+ } // namespace resl
+diff --git a/src/system/file.h b/src/system/file.h
+index 445404a..d5036c5 100644
+--- a/src/system/file.h
++++ b/src/system/file.h
+@@ -1,14 +1,15 @@
+ #pragma once
+ 
+-#include <SDL_rwops.h>
+-
+ #include <cstddef>
++#include <cstdint>
++#include <cstdio>
+ 
+ namespace resl {
+ 
++// Oracle: stdio-based replacement of the SDL_RWops based File class.
+ class File {
+ public:
+-    using pos_type = Sint64;
++    using pos_type = std::int64_t;
+ 
+     File() = default;
+     File(const char* fileName, const char* mode) noexcept;
+@@ -38,7 +39,7 @@ public:
+     bool eof() const noexcept { return m_eofBit; }
+ 
+ private:
+-    SDL_RWops* m_ops = nullptr;
++    std::FILE* m_ops = nullptr;
+     bool m_eofBit : 1 = false;
+     bool m_failBit : 1 = false;
+     bool m_badBit : 1 = false;
+diff --git a/src/ui/main_menu.cpp b/src/ui/main_menu.cpp
+index 896bb92..5b32d6d 100644
+--- a/src/ui/main_menu.cpp
++++ b/src/ui/main_menu.cpp
+@@ -30,7 +30,7 @@
+ #include <ui/components/button.h>
+ #include <ui/components/menu_button.h>
+ 
+-#include <SDL_log.h>
++#include <cstdio>
+ 
+ #include <cassert>
+ #include <cstdint>
+@@ -203,8 +203,7 @@ inline ArchiveMenuAction showArchiveMenu()
+                         std::error_code ec;
+                         std::filesystem::remove(file.filePath);
+                         if (ec != std::error_code()) [[unlikely]] {
+-                            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+-                                         "unable to remove the file \"%s\"",
++                            std::fprintf(stderr, "unable to remove the file \"%s\"\n",
+                                          file.filePath.string().c_str());
+                         }
+                         showNextFile = true;

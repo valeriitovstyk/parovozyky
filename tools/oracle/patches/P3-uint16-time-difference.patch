@@ -1,0 +1,16 @@
+diff --git a/src/game/move_trains.cpp b/src/game/move_trains.cpp
+index dba5d12..9b98483 100644
+--- a/src/game/move_trains.cpp
++++ b/src/game/move_trains.cpp
+@@ -475,7 +475,10 @@ Task taskMoveAndRedrawTrains()
+                 curChain = 0;
+ 
+             Carriage* carriage = g_trainDrawingChains[curChain];
+-            if (!carriage || (getTime() - carriage->train->lastMovementTime < minMovementPeriod))
++            // Oracle (P3): Turbo C computes this difference in 16-bit unsigned
++            // arithmetic; reSL promotes it to 32-bit int (see docs/fidelity.md, F2).
++            if (!carriage ||
++                static_cast<TimeT>(getTime() - carriage->train->lastMovementTime) < minMovementPeriod)
+                 continue;
+ 
+             bool needToRestartDrawing = false;

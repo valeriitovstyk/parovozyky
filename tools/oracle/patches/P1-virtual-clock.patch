@@ -1,0 +1,177 @@
+diff --git a/src/system/time.cpp b/src/system/time.cpp
+index af05bec..68670ad 100644
+--- a/src/system/time.cpp
++++ b/src/system/time.cpp
+@@ -1,10 +1,10 @@
+ #include "time.h"
+ 
+ #include "driver/driver.h"
++#include "driver/headless/oracle.h"
+ 
+ #include <cassert>
+ #include <chrono>
+-#include <optional>
+ 
+ namespace resl {
+ 
+@@ -38,7 +38,8 @@ namespace resl {
+  */
+ 
+ class Timer {
+-    using ClockT = std::chrono::steady_clock;
++    // Oracle (P1): virtual clock instead of std::chrono::steady_clock
++    using ClockT = oracle::VirtualClock;
+ 
+ public:
+     static Timer& instance()
+@@ -86,57 +87,33 @@ public:
+         start();
+     }
+ 
+-private:
+-    Timer()
++    void oracleState(std::int32_t out[5]) const
+     {
+-        Driver::instance().vga().addOverlay([this](SDL_Renderer* r, int) {
+-            Texture* texture = nullptr;
+-            switch (m_multiplier) {
+-            case 2:
+-                if (!m_textureFast2)
+-                    m_textureFast2 = Texture(r, "time_fast2.png");
+-                texture = &*m_textureFast2;
+-                break;
+-            case 3:
+-                if (!m_textureFast3)
+-                    m_textureFast3 = Texture(r, "time_fast3.png");
+-                texture = &*m_textureFast3;
+-                break;
+-            default:
+-                return;
+-            }
+-
+-            assert(texture);
+-
+-            int texW = 0;
+-            int texH = 0;
+-            SDL_QueryTexture(*texture, nullptr, nullptr, &texW, &texH);
+-
+-            static constexpr int MARGIN_X = 20;
+-            static constexpr int MARGIN_Y = 50;
+-
+-            assert(texture);
+-            SDL_Rect dst;
+-            dst.w = texW;
+-            dst.h = texH;
+-            dst.x = MARGIN_X;
+-            dst.y = PHYSICAL_SCREEN_HEIGHT - MARGIN_Y;
+-            SDL_RenderCopy(r, *texture, nullptr, &dst);
+-        });
++        const std::int64_t st = m_startTime.time_since_epoch().count();
++        out[0] = m_startValue;
++        out[1] = m_enabled;
++        out[2] = m_multiplier;
++        out[3] = static_cast<std::int32_t>(st & 0xFFFFFFFF);
++        out[4] = static_cast<std::int32_t>(st >> 32);
+     }
+ 
++private:
++    Timer() = default;
++
+     Timer(const Timer&) = delete;
+     Timer& operator=(const Timer&) = delete;
+ 
+-    std::optional<Texture> m_textureFast2;
+-    std::optional<Texture> m_textureFast3;
+-
+     TimeT m_startValue = 0;
+     ClockT::time_point m_startTime;
+     int m_multiplier = 1;
+     bool m_enabled = false;
+ };
+ 
++void oracleTimerState(std::int32_t out[5])
++{
++    Timer::instance().oracleState(out);
++}
++
+ /* 1c61:000e */
+ std::uint16_t getTime()
+ {
+diff --git a/src/tasks/scheduler.cpp b/src/tasks/scheduler.cpp
+index 3969d19..d5c16a1 100644
+--- a/src/tasks/scheduler.cpp
++++ b/src/tasks/scheduler.cpp
+@@ -7,11 +7,7 @@
+ #include <chrono>
+ #include <compare>
+ 
+-#ifdef __EMSCRIPTEN__
+-#   include <emscripten.h>
+-#else
+-#   include <thread>
+-#endif
++#include <system/driver/headless/oracle.h>
+ 
+ namespace resl {
+ 
+@@ -31,7 +27,8 @@ namespace {
+         }
+     };
+ 
+-    using Clock = std::chrono::steady_clock;
++    // Oracle (P1): virtual clock
++    using Clock = oracle::VirtualClock;
+ 
+     static constexpr Clock::duration s_idleSleepTime = std::chrono::milliseconds(10);
+ 
+@@ -165,11 +162,8 @@ void Scheduler::run()
+             sleepTime = t - now;
+         }
+ 
+-#ifdef __EMSCRIPTEN__
+-        emscripten_sleep(std::chrono::duration_cast<std::chrono::milliseconds>(sleepTime).count());
+-#else
+-        std::this_thread::sleep_for(sleepTime);
+-#endif // __EMSCRIPTEN__
++        // Oracle (P1): idle sleep is a jump of the virtual clock
++        oracle::advanceBy(std::chrono::duration_cast<Clock::duration>(sleepTime));
+     }
+ }
+ 
+diff --git a/src/tasks/task.h b/src/tasks/task.h
+index e616699..23c8d89 100644
+--- a/src/tasks/task.h
++++ b/src/tasks/task.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <system/driver/headless/oracle.h>
+ #include <system/time.h>
+ 
+ #include <cassert>
+@@ -12,7 +13,8 @@ namespace resl {
+ struct TaskPromise;
+ 
+ struct Context {
+-    using Time = std::chrono::steady_clock::time_point;
++    // Oracle (P1): virtual clock
++    using Time = oracle::VirtualClock::time_point;
+ 
+     Context(unsigned priority)
+         : m_priority(priority)
+@@ -71,13 +73,13 @@ void Task::resume() const
+ class SleepAwaitable {
+ public:
+     SleepAwaitable()
+-        : m_awakeTime(std::chrono::steady_clock::now())
++        : m_awakeTime(oracle::VirtualClock::now())
+     {
+     }
+ 
+     template <typename DurationT>
+     SleepAwaitable(DurationT sleepFor)
+-        : m_awakeTime(std::chrono::steady_clock::now() + sleepFor)
++        : m_awakeTime(oracle::VirtualClock::now() + sleepFor)
+     {
+     }
+ 

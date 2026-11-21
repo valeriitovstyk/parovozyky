@@ -1,0 +1,178 @@
+diff --git a/src/game/demo.cpp b/src/game/demo.cpp
+index 5fdffed..307d9ea 100644
+--- a/src/game/demo.cpp
++++ b/src/game/demo.cpp
+@@ -32,11 +32,12 @@ Task g_taskDemoAI;
+ 
+ //-----------------------------------------------------------------------------
+ 
++/* 1d77:0000 : 16 bytes */
++/* Oracle (P5): moved out of loadDemo() */ char g_demoFileName[16] = "demo_a";
++
+ /* 16a6:09f8 */
+ [[nodiscard]] bool loadDemo()
+ {
+-    /* 1d77:0000 : 16 bytes */
+-    static char g_demoFileName[16] = "demo_a";
+ 
+     char origPlayerName[std::size(g_playerName)];
+     std::strcpy(origPlayerName, g_playerName);
+@@ -65,7 +66,7 @@ void stopDemo()
+ }
+ 
+ /* 262d:21c0 : 6 bytes */
+-static MsgMouseEvent g_demoMouseMsg;
++/* Oracle (P5): not static */ MsgMouseEvent g_demoMouseMsg;
+ 
+ /* 1300:0273 */
+ static void moveCursorTowardsPoint(std::int16_t x, std::int16_t y)
+diff --git a/src/game/main_loop.cpp b/src/game/main_loop.cpp
+index 6459e67..5e8f594 100644
+--- a/src/game/main_loop.cpp
++++ b/src/game/main_loop.cpp
+@@ -47,7 +47,7 @@ Task g_taskGameMainLoop;
+ // Time elapsed since the beginning of the current game year.
+ // One game year corresponds to the value 2000 of this counter.
+ /* 262d:6f50 : 2 bytes */
+-static std::int16_t g_gameTime = 0;
++/* Oracle (P5): not static */ std::int16_t g_gameTime = 0;
+ 
+ //-----------------------------------------------------------------------------
+ 
+diff --git a/src/game/mouse/mouse.cpp b/src/game/mouse/mouse.cpp
+index 4237541..23f68f6 100644
+--- a/src/game/mouse/mouse.cpp
++++ b/src/game/mouse/mouse.cpp
+@@ -29,7 +29,7 @@
+ namespace resl {
+ 
+ /* 262d:6ef8 : 1 byte */
+-static std::uint8_t g_previousMouseButtonState = 0;
++/* Oracle (P5): not static */ std::uint8_t g_previousMouseButtonState = 0;
+ 
+ /* 1d7d:1c96 */
+ MessageQueue<MsgMouseEvent> g_mouseMsgQueue;
+diff --git a/src/game/train.cpp b/src/game/train.cpp
+index 92e8dca..e6da884 100644
+--- a/src/game/train.cpp
++++ b/src/game/train.cpp
+@@ -436,15 +436,15 @@ Train* spawnServer(std::int16_t entranceIdx)
+     return train;
+ }
+ 
++/* 262d:6f4e : 1 byte */
++/* Oracle (P5): moved out of accelerateTrains() */ std::uint8_t g_lastProcessedTrain = 0;
++
++/* 262d:6f3a : 20 bytes */
++/* Oracle (P5): moved out of accelerateTrains() */ std::uint8_t g_lastProcessedCarriages[20] = {};
++
+ /* 16a6:06e0 */
+ void accelerateTrains(std::int16_t count)
+ {
+-    /* 262d:6f4e : 1 byte */
+-    static std::uint8_t g_lastProcessedTrain = 0;
+-
+-    /* 262d:6f3a : 20 bytes */
+-    static std::uint8_t g_lastProcessedCarriages[g_trains.size()] = {};
+-
+     for (int16_t i = 0; i < count; ++i) {
+         g_lastProcessedTrain = (g_lastProcessedTrain + 1) % g_trains.size();
+ 
+diff --git a/src/tasks/message_queue.h b/src/tasks/message_queue.h
+index c666eb6..c1e9386 100644
+--- a/src/tasks/message_queue.h
++++ b/src/tasks/message_queue.h
+@@ -67,6 +67,19 @@ public:
+         }
+     }
+ 
++    // Oracle (P5): introspection for state dumps
++    std::size_t size() const { return m_queue.size(); }
++    bool hasWaitingTask() const { return static_cast<bool>(m_waitingTask); }
++    template <typename F>
++    void forEach(F&& f) const
++    {
++        std::queue<MsgT> copy = m_queue;
++        while (!copy.empty()) {
++            f(copy.front());
++            copy.pop();
++        }
++    }
++
+ private:
+     std::queue<MsgT> m_queue;
+     std::coroutine_handle<TaskPromise> m_waitingTask;
+diff --git a/src/tasks/scheduler.cpp b/src/tasks/scheduler.cpp
+index d5c16a1..916f05a 100644
+--- a/src/tasks/scheduler.cpp
++++ b/src/tasks/scheduler.cpp
+@@ -60,6 +60,10 @@ void Scheduler::addTask(Task task)
+ 
+     m_tasks.emplace_back(task, Context(highestPriority + 1));
+     task.promise().m_context = &m_tasks.back().second;
++    // Oracle (P5)
++    static unsigned s_nextTaskId = 0;
++    task.promise().m_context->m_id = ++s_nextTaskId;
++    oracle::onTaskAdded(s_nextTaskId);
+ 
+     m_queue.push_back(task);
+     std::ranges::push_heap(m_queue, AwakeTimeCompare());
+@@ -137,6 +141,7 @@ void Scheduler::run()
+ 
+         if (taskToResume) {
+             assert(!taskToResume.promise().m_context->m_suspended);
++            const unsigned resumedTaskId = taskToResume.promise().m_context->m_id;
+             taskToResume.resume();
+             if (taskToResume.done()) {
+                 auto iter = std::find_if(m_tasks.begin(), m_tasks.end(),
+@@ -150,6 +155,8 @@ void Scheduler::run()
+                 m_queue.push_back(taskToResume);
+                 std::ranges::push_heap(m_queue, AwakeTimeCompare());
+             }
++            // Oracle (P5): trace point
++            oracle::onTaskResumed(resumedTaskId);
+             continue;
+         }
+ 
+diff --git a/src/tasks/task.h b/src/tasks/task.h
+index 23c8d89..e9454f5 100644
+--- a/src/tasks/task.h
++++ b/src/tasks/task.h
+@@ -25,6 +25,8 @@ struct Context {
+     Time m_sleepUntil = {};
+     unsigned m_priority;
+     bool m_suspended = false;
++    // Oracle (P5): sequential creation number, used in traces
++    unsigned m_id = 0;
+ };
+ 
+ struct Task : public std::coroutine_handle<TaskPromise> {
+diff --git a/src/ui/components/status_bar.cpp b/src/ui/components/status_bar.cpp
+index bf8a9f1..513c620 100644
+--- a/src/ui/components/status_bar.cpp
++++ b/src/ui/components/status_bar.cpp
+@@ -1,5 +1,7 @@
+ #include "status_bar.h"
+ 
++#include <system/driver/headless/oracle.h>
++
+ #include <graphics/color.h>
+ #include <graphics/drawing.h>
+ #include <graphics/text.h>
+@@ -10,7 +12,7 @@
+ namespace resl {
+ 
+ /* 1d7d:0090 : 1 byte */
+-static std::int8_t g_footerMessageTimeout = 1;
++/* Oracle (P5): not static */ std::int8_t g_footerMessageTimeout = 1;
+ 
+ /* 12ba:0097 */
+ void drawCopyright(std::int16_t yOffset)
+@@ -31,6 +33,7 @@ void drawStatusBarWithCopyright(std::int16_t yOffset)
+ /* 12ba:0003 */
+ void showStatusMessage(const char* msg, std::int16_t yOffset)
+ {
++    oracle::onStatusMessage(msg); // Oracle (P5)
+     g_footerMessageTimeout = 7;
+     graphics::filledRectangle(0, yOffset + 335, 80, 15, 0xFF, Color::White);
+     const std::int16_t msgLen = static_cast<std::int16_t>(std::strlen(msg));

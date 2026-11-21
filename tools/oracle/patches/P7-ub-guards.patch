@@ -1,0 +1,39 @@
+diff --git a/src/game/move_trains.cpp b/src/game/move_trains.cpp
+index 9b98483..0a8135d 100644
+--- a/src/game/move_trains.cpp
++++ b/src/game/move_trains.cpp
+@@ -1,5 +1,7 @@
+ #include "move_trains.h"
+ 
++#include <system/driver/headless/oracle.h>
++
+ #include "drawing.h"
+ #include "entrance.h"
+ #include "header.h"
+@@ -97,6 +99,10 @@ void moveAlongPath(Location& loc, std::int16_t distance)
+         }
+ 
+         const RailConnection& next = loc.rail->connections[loc.forwardDirection];
++        // Oracle (P7): moving past an impasse or into a disabled switch path
++        // dereferences nullptr / g_disabledSwitchPath (reSL crashes, DOS reads garbage)
++        if (!next.rail || next.rail == g_disabledSwitchPath) [[unlikely]]
++            oracle::undefinedBehavior("moveAlongPath: invalid rail");
+         if (next.slot)
+             loc.pathStep = g_movementPaths[next.rail->type].size - 1;
+         else
+diff --git a/src/game/resources/movement_paths.h b/src/game/resources/movement_paths.h
+index 307c00c..cd7a47d 100644
+--- a/src/game/resources/movement_paths.h
++++ b/src/game/resources/movement_paths.h
+@@ -12,7 +12,10 @@ struct PathStep {
+ 
+ struct Path {
+     std::uint16_t size;
+-    PathStep data[235];
++    // Oracle (P7): the entrance path (type 6) has 255 steps but no data in
++    // reSL; steps 235..254 used to read past the end of g_movementPaths.
++    // Extended with zeros (the same as the rest of path 6), see docs/fidelity.md U2.
++    PathStep data[255];
+ };
+ 
+ /* 1d7d:02d4 - 6594 bytes */

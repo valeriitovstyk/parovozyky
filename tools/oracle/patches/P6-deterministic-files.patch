@@ -1,0 +1,132 @@
+diff --git a/src/system/filesystem.cpp b/src/system/filesystem.cpp
+index b2343a7..1d485c2 100644
+--- a/src/system/filesystem.cpp
++++ b/src/system/filesystem.cpp
+@@ -16,6 +16,7 @@
+ #   include <filesystem>
+ #   include <string>
+ #   include <system_error>
++#   include <vector>
+ #endif
+ 
+ #ifdef __EMSCRIPTEN__
+@@ -153,87 +154,54 @@ namespace {
+ 
+ #else // !WIN32
+ 
++    // Oracle (P6): deterministic file search - entries are sorted by name and
++    // every file has the same fixed date/time (1992-06-15 12:00:00).
+     class FileSearch {
+     public:
+         bool findFirst(const char* pattern)
+         {
+-#   ifdef ANDROID
+-            std::filesystem::path p(pattern);
+-            if (!p.is_absolute())
+-                p = SDL_AndroidGetInternalStoragePath() / p;
+-#   else
+             std::filesystem::path p(std::filesystem::absolute(pattern));
+-#   endif
+             m_pattern = p.filename().string();
++            m_entries.clear();
++            m_pos = 0;
+             std::error_code ec;
+-            m_dirIter = std::filesystem::directory_iterator(p.parent_path(), ec);
+-            return ec == std::error_code() && findNextEntry();
++            for (const std::filesystem::directory_entry& e :
++                 std::filesystem::directory_iterator(p.parent_path(), ec)) {
++                if (e.is_regular_file() && matchPattern(e.path().filename().string()))
++                    m_entries.push_back(e.path());
++            }
++            if (ec != std::error_code())
++                return false;
++            std::sort(m_entries.begin(), m_entries.end(),
++                      [](const std::filesystem::path& a, const std::filesystem::path& b) {
++                          return a.filename().string() < b.filename().string();
++                      });
++            return !m_entries.empty();
+         }
+ 
+         bool findNext()
+         {
+-            assert(std::filesystem::begin(m_dirIter) != std::filesystem::end(m_dirIter));
+-            ++m_dirIter;
+-            return std::filesystem::begin(m_dirIter) != std::filesystem::end(m_dirIter) && findNextEntry();
++            assert(m_pos < m_entries.size());
++            return ++m_pos < m_entries.size();
+         }
+ 
+         FileInfo lastSearchResult()
+         {
+-            using namespace std::chrono;
+-
+-            assert(std::filesystem::begin(m_dirIter) != std::filesystem::end(m_dirIter));
++            assert(m_pos < m_entries.size());
+             FileInfo result;
+-
+-            result.filePath = m_dirIter->path();
+-            std::error_code ec;
+-            std::filesystem::file_time_type fileTime =
+-                std::filesystem::last_write_time(result.filePath, ec);
+-            if (ec == std::error_code()) [[likely]] {
+-                system_clock::time_point sysTime = time_point_cast<system_clock::duration>(
+-                    fileTime - std::filesystem::file_time_type::clock::now() + system_clock::now());
+-
+-                // Date and time format:
+-                // https://www.stanislavs.org/helppc/file_attributes.html
+-                auto tpDays = std::chrono::floor<days>(sysTime);
+-                year_month_day date(tpDays);
+-                assert(date.ok());
+-                const unsigned day = static_cast<unsigned>(date.day());
+-                const unsigned month = static_cast<unsigned>(date.month());
+-                const int year = std::max(static_cast<int>(date.year()), 1980);
+-                assert(day >= 1 && day <= 31);
+-                assert(month >= 1 && month <= 12);
+-                result.fileDate = day | (month << 5) | ((year - 1980) << 9);
+-
+-                hh_mm_ss time(std::chrono::floor<seconds>(sysTime - tpDays));
+-                assert(time.seconds().count() < 60);
+-                assert(time.minutes().count() < 60);
+-                assert(time.hours().count() < 24);
+-                result.fileTime = (time.seconds().count() * 2) |
+-                    (time.minutes().count() << 5) |
+-                    (time.hours().count() << 11);
+-            }
++            result.filePath = m_entries[m_pos];
++            result.fileDate = 15 | (6 << 5) | ((1992 - 1980) << 9);
++            result.fileTime = (0 * 2) | (0 << 5) | (12 << 11);
+             return result;
+         }
+ 
+     private:
+-        bool findNextEntry()
+-        {
+-            for (const std::filesystem::directory_entry& e : m_dirIter) {
+-                if (!e.is_regular_file())
+-                    continue;
+-                if (matchPattern(e.path().filename()))
+-                    return true;
+-            }
+-            return false;
+-        }
+-
+         bool matchPattern(const std::string& p)
+         {
+             // The simplified glob syntax is enough for reSL
+             // (only supports '?' placeholder and constant symbols)
+             if (p.size() != m_pattern.size())
+                 return false;
+-
+             for (std::size_t i = 0; i < m_pattern.size(); ++i) {
+                 if (m_pattern[i] != '?' && m_pattern[i] != p[i])
+                     return false;
+@@ -241,7 +209,8 @@ namespace {
+             return true;
+         }
+ 
+-        std::filesystem::directory_iterator m_dirIter;
++        std::vector<std::filesystem::path> m_entries;
++        std::size_t m_pos = 0;
+         std::string m_pattern;
+     };
+ 

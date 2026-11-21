@@ -1,0 +1,57 @@
+diff --git a/src/main.cpp b/src/main.cpp
+index 0b9e473..c319832 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -73,7 +73,9 @@ static void initTasks(/* void* taskStacksMemory */)
+ /* 15ab:0018 */
+ int main(int argc, char* argv[])
+ {
+-    const unsigned seed = static_cast<unsigned>(std::time(nullptr));
++    // Oracle (P2): deterministic seed (RESL_SEED) instead of time(nullptr)
++    const char* seedEnv = std::getenv("RESL_SEED");
++    const unsigned seed = seedEnv ? static_cast<unsigned>(std::strtoul(seedEnv, nullptr, 10)) : 1u;
+     std::srand(seed);
+     if (argc == 3 && argv[2][0] == 'S') {
+         std::srand(static_cast<unsigned>(argv[2][1]));
+diff --git a/src/system/tc_rand.cpp b/src/system/tc_rand.cpp
+new file mode 100644
+index 0000000..7ed32ed
+--- /dev/null
++++ b/src/system/tc_rand.cpp
+@@ -0,0 +1,36 @@
++// Oracle (P2): Turbo C runtime rand()/srand() instead of the platform ones.
++//
++// ShortLine was built with Turbo C, whose rand() is a 32-bit LCG returning
++// 15 bits:   seed = seed * 22695477 + 1;  return (seed >> 16) & 0x7FFF;
++// srand() takes a 16-bit `unsigned`. reSL calls the platform std::rand()
++// (31 bits on macOS/glibc), which changes the probability of expressions like
++// `(rand() & 0xFFFF) < p` (see docs/fidelity.md, F1).
++//
++// These definitions in the main executable take precedence over libc's ones,
++// and std::rand/std::srand are `using ::rand/::srand`.
++
++#include <cstdint>
++
++namespace {
++std::uint32_t g_tcSeed = 1;
++}
++
++extern "C" int rand(void)
++{
++    g_tcSeed = g_tcSeed * 22695477u + 1u;
++    return static_cast<int>((g_tcSeed >> 16) & 0x7FFF);
++}
++
++extern "C" void srand(unsigned seed)
++{
++    g_tcSeed = seed & 0xFFFFu;
++}
++
++namespace resl {
++
++std::uint32_t oracleRandState()
++{
++    return g_tcSeed;
++}
++
++} // namespace resl
