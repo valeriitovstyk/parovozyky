@@ -33,23 +33,27 @@ let bad = 0;
 let totalBytes = 0;
 
 await pool(scenarios, Math.max(1, cpus().length - 1), async (sc) => {
-  const { trace } = await runScenario(sc);
+  const { trace, files } = await runScenario(sc);
+  const manifest = JSON.stringify(files, null, 1) + '\n';
   if (!/^E \d+ (stop|ub|exit) /m.test(trace)) throw new Error(`${sc.name}: the trace has no stop marker`);
   const json = JSON.stringify(sc) + '\n';
   const gz = gzipSync(Buffer.from(trace), { level: 9 });
   totalBytes += gz.length;
   const scPath = join(scenDir, `${sc.name}.json`);
   const trPath = join(traceDir, `${sc.name}.trace.gz`);
+  const fiPath = join(traceDir, `${sc.name}.files.json`);
   if (check) {
     const sameSc = existsSync(scPath) && readFileSync(scPath, 'utf8') === json;
     const sameTr = existsSync(trPath) && gunzipSync(readFileSync(trPath)).toString() === trace;
-    if (!sameSc || !sameTr) {
+    const sameFi = existsSync(fiPath) && readFileSync(fiPath, 'utf8') === manifest;
+    if (!sameSc || !sameTr || !sameFi) {
       ++bad;
-      console.log(`DIFF ${sc.name} (scenario ${sameSc ? 'same' : 'differs'}, trace ${sameTr ? 'same' : 'differs'})`);
+      console.log(`DIFF ${sc.name} (scenario ${sameSc ? 'same' : 'differs'}, trace ${sameTr ? 'same' : 'differs'}, files ${sameFi ? 'same' : 'differ'})`);
     }
   } else {
     writeFileSync(scPath, json);
     writeFileSync(trPath, gz);
+    writeFileSync(fiPath, manifest);
   }
 });
 

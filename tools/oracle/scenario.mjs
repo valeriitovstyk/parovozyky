@@ -13,7 +13,8 @@
 // }
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,7 +63,12 @@ export function runScenario(sc, { screenshotEveryUs = 0, keepDir = false } = {})
     p.on('close', (status, signal) => {
       try {
         if (status !== 0) throw new Error(`oracle failed for ${sc.name}: status=${status} signal=${signal}\n${stderr}`);
-        resolvePromise({ trace: readFileSync(join(dir, '.trace'), 'utf8'), dir });
+        const files = {};
+        for (const f of readdirSync(dir).sort()) {
+          if (f.startsWith('.')) continue;
+          files[f] = createHash('sha256').update(readFileSync(join(dir, f))).digest('hex');
+        }
+        resolvePromise({ trace: readFileSync(join(dir, '.trace'), 'utf8'), files, dir });
       } catch (e) {
         reject(e);
       } finally {

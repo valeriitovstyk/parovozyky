@@ -2,7 +2,8 @@
 // On a mismatch the port trace is written to .build/golden-out/<name>.trace and
 // the first differing line is reported together with a diff of the state
 // sections (from the nearest dumps).
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
@@ -26,7 +27,7 @@ interface Scenario {
   input: [number, 'key' | 'mouse', ...number[]][];
 }
 
-export function runPort(sc: Scenario): string[] {
+export function runPort(sc: Scenario): { lines: string[]; files: Record<string, string> } {
   const files = new MemoryFileStore(buildFiles(sc, RESOURCES));
   const sim = createSim({
     seed: sc.seed,
@@ -43,7 +44,9 @@ export function runPort(sc: Scenario): string[] {
     sim.pushInput(ev);
   }
   sim.advanceTo(Number.MAX_SAFE_INTEGER);
-  return sim.trace!.lines;
+  const manifest: Record<string, string> = {};
+  for (const f of files.list().sort()) manifest[f] = createHash('sha256').update(files.read(f)!).digest('hex');
+  return { lines: sim.trace!.lines, files: manifest };
 }
 
 /** state reconstructed from D/F lines up to (and including) line index `upTo` */
@@ -117,8 +120,11 @@ export function defineShard(shard: number, shards: number): void {
           .split('\n');
         if (expected[expected.length - 1] === '') expected.pop();
         const actual = runPort(sc);
-        const err = compare(name, expected, actual);
+        const err = compare(name, expected, actual.lines);
         expect(err, err ?? '').toBeNull();
+        // T3: files written by the game (saves, results.tbl) are byte-identical
+        const fiPath = join(TRACE_DIR, `${name}.files.json`);
+        if (existsSync(fiPath)) expect(actual.files).toEqual(JSON.parse(readFileSync(fiPath, 'utf8')));
       });
     }
   });

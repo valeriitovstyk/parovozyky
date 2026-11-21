@@ -163,6 +163,37 @@ export function year2000Scenario() {
   };
 }
 
+// Archive: browse the saved games of resources/extra (View, Next...), start the last one.
+export function archiveScenario() {
+  const extra = ['017EN815.25_', '048hl949.02_', '050BT866.01_', '077TE805.01_', '203sg999.01_'];
+  const input = [];
+  intro(input);
+  key(input, 4 * S, KEY.A);
+  let t = 7 * S;
+  for (let i = 0; i < extra.length - 1; ++i) {
+    key(input, t, KEY.V); // view
+    t += 2 * S;
+    input.push([t, 'mouse', ME.LR, 0, 300, 200]); // close the preview
+    t += 2 * S;
+    key(input, t, KEY.N); // next
+    t += 4 * S;
+  }
+  key(input, t, KEY.G);
+  t += 3 * S;
+  key(input, t, KEY.K2);
+  key(input, t + 60 * S, KEY.P); // pause, save, bye
+  key(input, t + 63 * S, KEY.S);
+  key(input, t + 66 * S, KEY.B);
+  return {
+    name: 'archive-extra',
+    seed: 5,
+    stopAtUs: t + 75 * S,
+    dumpEveryUs: 1 * S,
+    files: Object.fromEntries(extra.map((f) => [f, { from: f, dir: 'extra' }])),
+    input,
+  };
+}
+
 export function allScenarios() {
-  return [...demoScenarios(), ...botScenarios(), year2000Scenario()];
+  return [...demoScenarios(), ...botScenarios(), year2000Scenario(), archiveScenario()];
 }
