@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../.build/tsc/render",
+    "rootDir": ".",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "tsBuildInfoFile": "../../.build/tsc/render.tsbuildinfo",
+    "emitDeclarationOnly": true
+  },
+  "include": [
+    "src",
+    "test"
+  ],
+  "references": [
+    {
+      "path": "../sim"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "shortline-web",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @shortline/app dev",
+    "build": "pnpm --filter @shortline/app build",
+    "typecheck": "tsc -b",
+    "lint": "eslint .",
+    "test": "vitest run --project unit",
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "oracle:build": "bash tools/oracle/build.sh",
+    "oracle:golden": "node tools/oracle/golden.mjs",
+    "extract": "bash tools/extract/extract.sh",
+    "test:golden": "vitest run --project golden",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.1"
+  }
+}

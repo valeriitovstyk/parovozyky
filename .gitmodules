@@ -1,0 +1,3 @@
+[submodule "reference/reSL"]
+	path = reference/reSL
+	url = https://github.com/konovalov-aleks/reSL

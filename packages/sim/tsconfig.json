@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../.build/tsc/sim",
+    "rootDir": ".",
+    "types": [
+      "node"
+    ],
+    "tsBuildInfoFile": "../../.build/tsc/sim.tsbuildinfo",
+    "emitDeclarationOnly": true
+  },
+  "include": [
+    "src",
+    "test"
+  ]
+}
