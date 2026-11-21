@@ -450,10 +450,10 @@ index 0000000..67c4f70
 +} // namespace resl
 diff --git a/src/system/driver/headless/oracle.cpp b/src/system/driver/headless/oracle.cpp
 new file mode 100644
-index 0000000..f23ad9b
+index 0000000..74ed9e1
 --- /dev/null
 +++ b/src/system/driver/headless/oracle.cpp
-@@ -0,0 +1,292 @@
+@@ -0,0 +1,298 @@
 +// ShortLine oracle runtime.
 +//
 +// Environment:
@@ -720,6 +720,12 @@ index 0000000..f23ad9b
 +        std::fprintf(g_trace, "M %" PRId64 " %s\n", g_nowUs, msg);
 +}
 +
++void exitGame()
++{
++    finish("exit");
++    std::_Exit(0);
++}
++
 +void undefinedBehavior(const char* what)
 +{
 +    if (g_trace)
@@ -748,10 +754,10 @@ index 0000000..f23ad9b
 +} // namespace resl::oracle
 diff --git a/src/system/driver/headless/oracle.h b/src/system/driver/headless/oracle.h
 new file mode 100644
-index 0000000..38bab44
+index 0000000..cb1db2f
 --- /dev/null
 +++ b/src/system/driver/headless/oracle.h
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,50 @@
 +#pragma once
 +
 +// Oracle runtime: virtual clock, scripted input and state trace.
@@ -793,6 +799,10 @@ index 0000000..38bab44
 +// crashes. The oracle writes a "U" line, finishes the trace and exits; the
 +// TS port must detect the same situation at the same step.
 +[[noreturn]] void undefinedBehavior(const char* what);
++
++// Bye: finishes the trace and exits without running static destructors
++// (reSL's std::exit destroys the scheduler while a coroutine is running).
++[[noreturn]] void exitGame();
 +
 +// Delivers due scripted input events (called from Driver::pollEvent).
 +void deliverInput();

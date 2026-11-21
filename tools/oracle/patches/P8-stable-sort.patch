@@ -1,0 +1,66 @@
+diff --git a/src/game/init.cpp b/src/game/init.cpp
+index 04df8b9..5fbe956 100644
+--- a/src/game/init.cpp
++++ b/src/game/init.cpp
+@@ -21,6 +21,7 @@
+ 
+ #include <cassert>
+ #include <cstdint>
++#include <algorithm>
+ #include <cstdlib>
+ #include <iterator>
+ 
+@@ -232,9 +233,12 @@ static void generateForest()
+             y = genRandomNumber(271) + 47;
+         }
+     }
+-    std::qsort(static_cast<void*>(g_staticObjects),
+-               std::size(g_staticObjects), sizeof(StaticObject),
+-               compareStaticObjByY);
++    // Oracle (P8): compareStaticObjByY never returns 0, so the order of objects
++    // with equal Y depends on the qsort implementation (macOS libc / Turbo C).
++    // A stable sort makes it well-defined (docs/fidelity.md, D3).
++    (void)&compareStaticObjByY;
++    std::stable_sort(std::begin(g_staticObjects), std::end(g_staticObjects),
++                     [](const StaticObject& a, const StaticObject& b) { return a.y < b.y; });
+ }
+ 
+ /* 16a6:0963 */
+diff --git a/src/game/records.cpp b/src/game/records.cpp
+index ed8b70e..2d8bb8f 100644
+--- a/src/game/records.cpp
++++ b/src/game/records.cpp
+@@ -15,6 +15,7 @@
+ 
+ #include <cassert>
+ #include <cstdint>
++#include <algorithm>
+ #include <cstdlib>
+ #include <cstring>
+ #include <iterator>
+@@ -149,7 +150,11 @@ void showRecordsScreen()
+     drawText(169, 530, "* THE BEST MANAGERS *", Color::Black);
+     drawTextSmall(114, 548,
+                   " #  Name        Level : Year   Money   Trains", Color::Black);
+-    std::qsort(records, nRecords, sizeof(Record), &recordCompareByTrains);
++    // Oracle (P8): stable sort instead of qsort with an inconsistent comparator
++    (void)&recordCompareByTrains;
++    std::stable_sort(records, records + nRecords, [](const Record& a, const Record& b) {
++        return b.byTrains.trains < a.byTrains.trains;
++    });
+ 
+     const std::size_t nItemsToShow = std::min(maxItemsToShow, nRecords);
+     for (std::size_t i = 0; i < nItemsToShow && records[i].byTrains.trains; ++i) {
+@@ -163,7 +168,11 @@ void showRecordsScreen()
+         drawTextSmall(114, (i + 2) * 12 + 370, buf, Color::Black);
+     }
+ 
+-    std::qsort(records, nRecords, sizeof(Record), &recordCompareByLevelAndYear);
++    (void)&recordCompareByLevelAndYear;
++    std::stable_sort(records, records + nRecords, [](const Record& a, const Record& b) {
++        return b.byYears.level < a.byYears.level ||
++            (b.byYears.level == a.byYears.level && b.byYears.year < a.byYears.year);
++    });
+     for (std::size_t i = 0; i < nItemsToShow && records[i].byYears.level; ++i) {
+         char buf[80];
+         const RecordItem& ri = records[i].byYears;

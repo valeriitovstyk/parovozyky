@@ -1,5 +1,5 @@
 diff --git a/src/game/demo.cpp b/src/game/demo.cpp
-index 5fdffed..307d9ea 100644
+index 5187b65..3b40ae7 100644
 --- a/src/game/demo.cpp
 +++ b/src/game/demo.cpp
 @@ -32,11 +32,12 @@ Task g_taskDemoAI;
@@ -78,6 +78,29 @@ index 92e8dca..e6da884 100644
      for (int16_t i = 0; i < count; ++i) {
          g_lastProcessedTrain = (g_lastProcessedTrain + 1) % g_trains.size();
  
+diff --git a/src/system/exit.cpp b/src/system/exit.cpp
+index 1e84996..6644c6c 100644
+--- a/src/system/exit.cpp
++++ b/src/system/exit.cpp
+@@ -2,6 +2,8 @@
+ 
+ #include "sound.h"
+ 
++#include <system/driver/headless/oracle.h>
++
+ #include <cstdlib>
+ #include <iostream>
+ 
+@@ -17,7 +19,8 @@ void exitWithMessage(const char* msg)
+ 
+     nosound();
+     std::cout << msg << std::endl;
+-    std::exit(EXIT_SUCCESS);
++    // Oracle (P5): finish the trace, skip static destructors
++    oracle::exitGame();
+ }
+ 
+ } // namespace resl
 diff --git a/src/tasks/message_queue.h b/src/tasks/message_queue.h
 index c666eb6..c1e9386 100644
 --- a/src/tasks/message_queue.h
