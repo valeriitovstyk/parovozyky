@@ -1,0 +1,1 @@
+{"name":"demo-j-s1","seed":1,"stopAtUs":70000000,"dumpEveryUs":1000000,"files":{"demo_a":{"from":"demo_j"}},"input":[[1000000,"mouse",4,0,320,175],[4000000,"key",32,1],[4060000,"key",32,0]]}
