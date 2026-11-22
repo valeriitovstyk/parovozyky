@@ -43,6 +43,8 @@ export interface Sim {
   readonly halted: SimHalt | null;
   pushInput(ev: InputEvent): void;
   advanceTo(us: number): void;
+  /** the visible screen as palette indexes; returns the ARGB palette (needs `video: true`) */
+  renderIndexed(dst: Uint8Array): readonly number[] | null;
   /** the visible 640x350 screen as ARGB (needs `video: true`) */
   renderScreen(dst: Uint32Array): boolean;
   readonly trace: TraceRecorder | null;
@@ -122,6 +124,11 @@ export function createSim(opts: SimOptions): Sim {
       return m.halted;
     },
     pushInput: (ev) => m.pushInput(ev),
+    renderIndexed(dst: Uint8Array): readonly number[] | null {
+      if (!w.vga) return null;
+      w.vga.renderIndexed(dst, w.video.frameOriginY, w.video.lineCompare);
+      return w.vga.palette;
+    },
     renderScreen(dst: Uint32Array): boolean {
       if (!w.vga) return false;
       w.vga.renderScreen(dst, w.video.frameOriginY, w.video.lineCompare);

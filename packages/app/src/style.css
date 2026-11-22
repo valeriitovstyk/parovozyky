@@ -1,0 +1,39 @@
+:root {
+  color-scheme: dark;
+  --bg: #111;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: #eee;
+  font: 16px system-ui, sans-serif;
+}
+#app {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+#screen {
+  /* the original 640x350 picture was shown on a 4:3 monitor */
+  width: min(100vw, calc(100vh * 4 / 3));
+  aspect-ratio: 4 / 3;
+  image-rendering: pixelated;
+  cursor: none;
+  touch-action: none;
+}
+#overlay {
+  position: absolute;
+  inset: auto;
+  padding: 24px 32px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #555;
+  text-align: center;
+}
+#overlay button {
+  font: inherit;
+  padding: 6px 16px;
+}

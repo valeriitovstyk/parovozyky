@@ -6,3 +6,4 @@ dist/
 test-results/
 playwright-report/
 .DS_Store
+packages/app/public/game/

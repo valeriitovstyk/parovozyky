@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "resources": "node ../../tools/app/copy-resources.mjs",
+    "dev": "node ../../tools/app/copy-resources.mjs && vite",
+    "build": "node ../../tools/app/copy-resources.mjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

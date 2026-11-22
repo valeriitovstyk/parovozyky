@@ -7,3 +7,4 @@ export { FRAME_US } from './core/machine';
 export { collectState, hashSections, sectionsJson, TraceRecorder, type Section } from './trace';
 export type { SimEvent } from './game/globals';
 export { serializeGame } from './game/savefile';
+export { uiGlyphs } from './data/glyphs';

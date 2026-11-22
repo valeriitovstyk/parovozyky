@@ -109,6 +109,14 @@ export class Vga {
     );
   }
 
+  /** The visible screen as palette indexes (640x350) */
+  renderIndexed(dst: Uint8Array, frameOriginY: number, lineCompare: number): void {
+    for (let y = 0; y < 350; ++y) {
+      const srcY = y < lineCompare ? y + frameOriginY : y - lineCompare;
+      for (let x = 0; x < 640; ++x) dst[y * 640 + x] = this.pixel(x, srcY);
+    }
+  }
+
   /**
    * The visible screen (640x350 ARGB) as the CRT shows it: rows above the
    * line compare register come from `frameOriginY`, the rest from row 0.
