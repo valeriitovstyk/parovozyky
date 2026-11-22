@@ -40,7 +40,8 @@ export type SimEvent =
   | { type: 'explosion'; x: number; y: number }
   | { type: 'railStage'; tileX: number; tileY: number; railType: number; stage: number }
   | { type: 'exit'; message: string }
-  | { type: 'save'; fileName: string };
+  | { type: 'save'; fileName: string }
+  | { type: 'spawnCancelled'; reason: string };
 
 /** Mouse cursor modes (game/mouse/mode.h): only the mutable part is kept here */
 export interface Mode {
@@ -59,6 +60,10 @@ export class World {
   readonly rng: Rng;
   readonly files: FileStore;
   view: View | null = null;
+  /** what to do on undefined behaviour of the original game (docs/fidelity.md U1) */
+  ubPolicy: 'halt' | 'recover' = 'halt';
+  /** set while spawnTrain / spawnServer place a new train */
+  spawning = false;
 
   // system/keyboard.cpp
   lastKeyPressed = 0; // u8
@@ -257,8 +262,16 @@ function dialog(title: string, items: string[]): Dialog {
   return { title, itemNames, x: 0, itemY: new Array(7).fill(0), itemWidth: 0 };
 }
 
+/**
+ * docs/fidelity.md U1: a train being spawned walks into a dead end. With the
+ * 'recover' policy (the playable game) the spawn is cancelled; with 'halt'
+ * (oracle parity, tests) the simulation stops like the oracle does.
+ */
+export class SpawnCancelled extends Error {}
+
 /** Undefined behaviour of the original program (docs/fidelity.md) */
 export function ub(what: string): never {
+  if (G.ubPolicy === 'recover' && G.spawning) throw new SpawnCancelled(what);
   G.ubHandler(what);
   throw new Error(`undefined behaviour: ${what}`);
 }

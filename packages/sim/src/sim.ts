@@ -21,6 +21,12 @@ export interface SimOptions {
   trace?: TraceOptions;
   /** presentation events (status messages, dialogs, explosions...) */
   onEvent?: (e: SimEvent) => void;
+  /**
+   * Undefined behaviour of the original game (docs/fidelity.md U1): 'halt'
+   * stops like the oracle (default, tests); 'recover' cancels the spawn of a
+   * train that would walk into a dead end (the playable game).
+   */
+  ubPolicy?: 'halt' | 'recover';
   /** sound(freq) / nosound() with the virtual time */
   onSound?: (freq: number, t: number) => void;
 }
@@ -74,6 +80,7 @@ export function createSim(opts: SimOptions): Sim {
     },
   }) as GlobalsHolder;
   if (opts.onEvent) world.view = { event: opts.onEvent };
+  world.ubPolicy = opts.ubPolicy ?? 'halt';
   setGlobals(world);
 
   // main(): the SDL helper task is added first

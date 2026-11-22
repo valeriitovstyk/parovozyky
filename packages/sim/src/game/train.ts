@@ -2,7 +2,7 @@
 import { i16, u16, u8 } from '../core/ints';
 import type { Blocking, TaskGen } from '../core/scheduler';
 import { addWaitingTrain, entranceIsFree } from './entrance';
-import { G, pathStep, ub } from './globals';
+import { G, SpawnCancelled, pathStep, ub } from './globals';
 import { moveAlongPath } from './moveTrains';
 import { carriageYBias, trainGlyph, trainSpecification } from './res';
 import { showStatusMessage } from '../ui/statusBar';
@@ -225,7 +225,31 @@ function generateTrain(t: Train, entranceIdx: number): void {
 /* 1a65:0100 */
 function spawnTrain(entranceIdx: number): Train | null {
   const t = allocateTrainSlot();
-  if (t) {
+  if (t && !cancellable(t, () => placeTrain(t, entranceIdx))) return null;
+  return t;
+}
+
+/**
+ * Runs the placement of a new train; with the 'recover' UB policy a placement
+ * that walks into a dead end (docs/fidelity.md U1) frees the slot instead.
+ */
+function cancellable(t: Train, place: () => void): boolean {
+  G.spawning = true;
+  try {
+    place();
+    return true;
+  } catch (e) {
+    if (!(e instanceof SpawnCancelled)) throw e;
+    t.isFreeSlot = true;
+    G.emit({ type: 'spawnCancelled', reason: e.message });
+    return false;
+  } finally {
+    G.spawning = false;
+  }
+}
+
+function placeTrain(t: Train, entranceIdx: number): void {
+  {
     generateTrain(t, entranceIdx);
     t.head.rail = G.entrances[entranceIdx].rail;
     t.head.forwardDirection = 0;
@@ -258,7 +282,6 @@ function spawnTrain(entranceIdx: number): Train | null {
     t.year = G.headers[HeaderFieldId.Year].value;
     t.lastMovementTime = i16(G.m.getTime());
   }
-  return t;
 }
 
 /* 16a6:08bb */
@@ -310,7 +333,12 @@ export function* taskSpawnTrains(): TaskGen {
 /* 1a65:0256 */
 export function spawnServer(entranceIdx: number): Train | null {
   const train = allocateTrainSlot();
-  if (train) {
+  if (train && !cancellable(train, () => placeServer(train, entranceIdx))) return null;
+  return train;
+}
+
+function placeServer(train: Train, entranceIdx: number): void {
+  {
     const entrance = G.entrances[entranceIdx];
 
     train.carriageCnt = 1;
@@ -351,7 +379,6 @@ export function spawnServer(entranceIdx: number): Train | null {
     c0.x_direction = 0;
     train.headCarriageIdx = 0;
   }
-  return train;
 }
 
 /* 16a6:06e0 */
