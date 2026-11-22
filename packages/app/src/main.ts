@@ -10,6 +10,7 @@ import { Beeper } from './audio';
 import { BrowserFileStore } from './files';
 import { Hud } from './hud';
 import { attachInput, ME_LEFTPRESSED, ME_LEFTRELEASED, ME_RIGHTPRESSED, ME_RIGHTRELEASED } from './input';
+import { PosterView } from './poster';
 import { ClassicScreen } from './screen';
 import { ReplayRecorder } from './replay';
 import { Settings, loadSettings, saveSettings, type ViewMode } from './settings';
@@ -62,13 +63,16 @@ async function boot(): Promise<void> {
   overlay.hidden = true;
   // the game name over the original pictures: the banner of the loading
   // screen and the status bar of the classic view
-  const brandBanner = document.createElement('div');
-  brandBanner.className = 'brand brand-banner';
-  brandBanner.textContent = 'Паровозики';
+  // the title picture (Lviv station) over the original poster: it follows the
+  // poster in video memory (shown on the loading screen, slides away after it)
+  const posterBox = document.createElement('div');
+  posterBox.id = 'poster';
+  posterBox.hidden = true;
+  let poster: PosterView | null = null;
   const brandStatus = document.createElement('div');
   brandStatus.className = 'brand brand-status';
   brandStatus.textContent = 'Паровозики';
-  root.append(gl, classic, brandBanner, brandStatus, field, overlay);
+  root.append(gl, classic, posterBox, brandStatus, field, overlay);
 
   const settings = loadSettings();
   const view = params.get('view');
@@ -96,14 +100,13 @@ async function boot(): Promise<void> {
     // the classic 640x350 picture and the HUD cover exactly the logical field
     const tl = logicalToScreen(l, 0, 0);
     const br = logicalToScreen(l, 640, 350);
-    for (const e of [classic, field])
+    for (const e of [classic, field, posterBox])
       Object.assign(e.style, { left: `${tl.x}px`, top: `${tl.y}px`, width: `${br.x - tl.x}px`, height: `${br.y - tl.y}px` });
     const rect = (e: HTMLElement, x1: number, y1: number, x2: number, y2: number) => {
       const a = logicalToScreen(l, x1, y1);
       const b = logicalToScreen(l, x2, y2);
       Object.assign(e.style, { left: `${a.x}px`, top: `${a.y}px`, width: `${b.x - a.x}px`, height: `${b.y - a.y}px`, fontSize: `${(b.y - a.y) * 0.62}px` });
     };
-    rect(brandBanner, 134, 12, 522, 55); // the ribbon of the loading screen (captions)
     rect(brandStatus, 0, 335, 640, 350); // the copyright line of the status bar
     brandStatus.style.fontSize = `${((br.y - tl.y) / 350) * 11}px`;
     field.style.setProperty("--u", String((br.x - tl.x) / 640));
@@ -197,6 +200,7 @@ async function boot(): Promise<void> {
   for (const t of ['pointerdown', 'pointerup', 'pointermove'])
     for (const e of [toolbar.root, overlay]) e.addEventListener(t, (ev) => ev.stopPropagation());
 
+  let posterState: 'shown' | 'sliding' | 'off' = 'off';
   const draw = (nowMs: number) => {
     if (!game) return;
     const sim = game.sim;
@@ -219,8 +223,26 @@ async function boot(): Promise<void> {
       stats.frames++;
     }
     if (showClassic) screen.draw(sim, false);
-    brandBanner.hidden = !(sc === 'loading' && showClassic && sim.world.video.frameOriginY === 0);
-    brandStatus.hidden = !(showClassic && fieldScreen && !sim.world.video.statusText && !sim.halted);
+    // the poster is in video memory from the loading screen until the screen
+    // shift that follows it ends (frame origin back at 0)
+    const v = sim.world.video;
+    if (sc === 'loading') posterState = 'shown';
+    else if (posterState === 'shown' && v.frameOriginY === 350) posterState = 'sliding';
+    else if (posterState === 'sliding' && v.frameOriginY === 0) posterState = 'off';
+    const posterOn = posterState !== 'off' && showClassic && !sim.halted;
+    posterBox.hidden = !posterOn;
+    if (posterOn) {
+      posterBox.style.opacity = classic.style.opacity;
+      const shift = posterState === 'sliding' ? Math.min(v.lineCompare, 350) : 0;
+      if (!poster) {
+        poster = new PosterView();
+        Object.assign(poster.root.style, { position: 'absolute', inset: '0' });
+        posterBox.append(poster.root);
+      }
+      poster.root.style.transform = `translateY(${(shift / 350) * 100}%)`;
+      poster.update(nowMs);
+    }
+    brandStatus.hidden = !(showClassic && fieldScreen && !sim.world.video.statusText && !sim.halted) || posterOn;
     if (show3d && m === 'modern') hud.update(sim);
     const h = sim.halted;
     if (h && overlay.hidden) {

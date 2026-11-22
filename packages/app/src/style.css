@@ -352,9 +352,14 @@ body {
 .brand[hidden] {
   display: none;
 }
-.brand-banner {
-  background: #fff;
-  color: #111;
+/* the title picture over the original poster */
+#poster {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+}
+#poster[hidden] {
+  display: none;
 }
 .brand-status {
   background: #aaa;

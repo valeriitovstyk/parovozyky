@@ -42,6 +42,15 @@ async function until(page: Page, cond: (p: Probe) => boolean, timeout = 20_000):
   return last!;
 }
 
+/** waits for `seconds` of game time: menus animate in game time, and a slow
+ * (software) renderer may run the game a little slower than the wall clock */
+async function waitGame(page: Page, seconds: number): Promise<void> {
+  const start = await page.evaluate(() => window.__parovozyky!.game()!.sim.now);
+  await expect
+    .poll(() => page.evaluate(() => window.__parovozyky!.game()!.sim.now), { timeout: 20_000, intervals: [100] })
+    .toBeGreaterThanOrEqual(start + seconds * 1e6);
+}
+
 const canvas = (page: Page) => page.locator('#screen');
 
 async function skipLoadingScreen(page: Page) {
@@ -49,7 +58,7 @@ async function skipLoadingScreen(page: Page) {
   await page.waitForTimeout(300);
   await page.locator('#app').click({ position: { x: 400, y: 300 } });
   await until(page, (p) => p.screen === 'menu');
-  await page.waitForTimeout(1500); // the menu slides in
+  await waitGame(page, 1.5); // the menu slides in
 }
 
 test('full cycle with save and archive', async ({ page }) => {
@@ -70,13 +79,13 @@ test('full cycle with save and archive', async ({ page }) => {
   await page.keyboard.press('3');
   await until(page, (p) => p.entrances >= 2, 30_000);
   await page.keyboard.press('p');
-  await page.waitForTimeout(800);
+  await waitGame(page, 0.8);
   await page.keyboard.press('g');
   await until(page, (p) => p.trains > 0, 30_000);
 
   // pause -> Save -> Bye
   await page.keyboard.press('p');
-  await page.waitForTimeout(800);
+  await waitGame(page, 0.8);
   await page.keyboard.press('s');
   await until(page, (p) => p.userFiles.some((f) => /^.{8}\..{2}_$/.test(f)), 10_000);
   await page.keyboard.press('b');
@@ -88,7 +97,7 @@ test('full cycle with save and archive', async ({ page }) => {
   expect((await probe(page)).userFiles.some((f) => /^.{8}\..{2}_$/.test(f))).toBe(true);
   await page.keyboard.press('a');
   await until(page, (p) => p.screen === 'archive', 10_000);
-  await page.waitForTimeout(1000);
+  await waitGame(page, 1);
   await page.keyboard.press('g');
   await until(page, (p) => p.screen === 'game' && p.trains > 0, 10_000);
   expect((await probe(page)).halted).toBeNull();
