@@ -18,7 +18,7 @@ export interface Probe {
 
 export async function probe(page: Page): Promise<Probe> {
   return page.evaluate(() => {
-    const g = window.__shortline?.game();
+    const g = window.__parovozyky?.game();
     if (!g)
       return { screen: 'none', dialog: -1, money: 0, year: 0, entrances: 0, trains: 0, demo: false, mode: 0, userFiles: [], halted: null, status: '', page: 0, pauseItem: null };
     const w = g.sim.world;
@@ -43,7 +43,7 @@ export async function probe(page: Page): Promise<Probe> {
 /** test mode: advance the virtual time in 1/60 s frames */
 export async function advance(page: Page, seconds: number): Promise<void> {
   await page.evaluate((s) => {
-    for (let t = 0; t < s * 1e6; t += 16667) window.__shortline!.step(16667);
+    for (let t = 0; t < s * 1e6; t += 16667) window.__parovozyky!.step(16667);
   }, seconds);
 }
 
@@ -61,7 +61,7 @@ export async function advanceUntil(page: Page, cond: (p: Probe) => boolean, maxS
 
 export async function start(page: Page, query = ''): Promise<void> {
   await page.goto(`/?test=1&seed=7${query}`);
-  await expect.poll(() => page.evaluate(() => !!window.__shortline?.game())).toBe(true);
+  await expect.poll(() => page.evaluate(() => !!window.__parovozyky?.game())).toBe(true);
   await advanceUntil(page, (p) => p.screen === 'loading');
   await advance(page, 0.5);
   await page.locator('#app').click({ position: { x: 200, y: 200 } });

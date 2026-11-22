@@ -1,5 +1,6 @@
 {
-  "name": "@shortline/app",
+  "name": "@parovozyky/app",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,8 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@shortline/render": "workspace:*",
-    "@shortline/sim": "workspace:*"
+    "@parovozyky/render": "workspace:*",
+    "@parovozyky/sim": "workspace:*"
   },
   "devDependencies": {
     "vite": "^8.3.8"

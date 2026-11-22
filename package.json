@@ -1,5 +1,7 @@
 {
-  "name": "shortline-web",
+  "name": "parovozyky",
+  "version": "1.0.0",
+  "description": "Паровозики — графічна гра в браузері з оригінальною графікою",
   "private": true,
   "license": "GPL-3.0-only",
   "type": "module",
@@ -8,8 +10,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @shortline/app dev",
-    "build": "pnpm --filter @shortline/app build",
+    "dev": "pnpm --filter @parovozyky/app dev",
+    "build": "pnpm --filter @parovozyky/app build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run --project unit",

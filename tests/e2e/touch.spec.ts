@@ -27,7 +27,7 @@ test('tap, long tap and swipe', async ({ page }) => {
   const box = (await page.locator('#gl').boundingBox())!;
   const x = box.x + box.width * 0.62;
   const y = box.y + box.height * 0.55;
-  const railType = () => page.evaluate(() => window.__shortline!.game()!.sim.world.railCursorState.railType);
+  const railType = () => page.evaluate(() => window.__parovozyky!.game()!.sim.world.railCursorState.railType);
 
   // tap on the cursor tile: the next rail type
   await touch(page, 'tap', x, y);

@@ -18,7 +18,7 @@ function isInsideGameField(x: number, y: number): boolean {
 }
 
 function drawGrass(yOffset: number): void {
-  // drawGrass changes the state of the random number generator (PLAN.md 2.1.2)
+  // drawGrass changes the state of the random number generator
   const rng = G.rng;
   const seed = rng.rand();
   rng.srand(G.staticObjects[119].x);

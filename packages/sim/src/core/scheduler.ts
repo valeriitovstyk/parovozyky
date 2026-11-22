@@ -11,7 +11,7 @@
 //
 // Blocking waits are generators too (`yield* waitVerticalRetrace()`): they
 // must be able to return control to the host when the virtual time runs ahead
-// of the real time (PLAN.md 2.2).
+// of the real time.
 
 export type Effect =
   | { readonly k: 'sleep'; readonly until: number }

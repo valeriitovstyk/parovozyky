@@ -1,11 +1,11 @@
-// ShortLine in the browser: the deterministic simulator driven by the real
-// time (PLAN.md 3.2), the modern 3D renderer with the HTML HUD (default), the
+// Паровозики: the deterministic simulator driven by the real
+// time, the modern 3D renderer with the HTML HUD (default), the
 // classic renderer (F2) and the overlay of both (F3), input and the PC speaker.
 //
 // URL parameters: ?view=modern|classic|overlay, ?seed=N, ?test=1 (the time
-// does not run by itself: tests call window.__shortline.step(us)).
-import { createSim, SIM_VERSION, type Sim, type SimEvent } from '@shortline/sim';
-import { ModernRenderer, layoutFor, logicalToScreen, screenToLogical } from '@shortline/render';
+// does not run by itself: tests call window.__parovozyky.step(us)).
+import { createSim, SIM_VERSION, type Sim, type SimEvent } from '@parovozyky/sim';
+import { ModernRenderer, layoutFor, logicalToScreen, screenToLogical } from '@parovozyky/render';
 import { Beeper } from './audio';
 import { BrowserFileStore } from './files';
 import { Hud } from './hud';
@@ -26,7 +26,7 @@ interface Game {
 declare global {
   interface Window {
     /** for tests and debugging */
-    __shortline?: {
+    __parovozyky?: {
       game: () => Game | null;
       version: string;
       mode: () => ViewMode;
@@ -59,7 +59,15 @@ async function boot(): Promise<void> {
   const overlay = document.createElement('div');
   overlay.id = 'overlay';
   overlay.hidden = true;
-  root.append(gl, classic, field, overlay);
+  // the game name over the original pictures: the banner of the loading
+  // screen and the status bar of the classic view
+  const brandBanner = document.createElement('div');
+  brandBanner.className = 'brand brand-banner';
+  brandBanner.textContent = 'Паровозики';
+  const brandStatus = document.createElement('div');
+  brandStatus.className = 'brand brand-status';
+  brandStatus.textContent = 'Паровозики';
+  root.append(gl, classic, brandBanner, brandStatus, field, overlay);
 
   const settings = loadSettings();
   const view = params.get('view');
@@ -89,6 +97,14 @@ async function boot(): Promise<void> {
     const br = logicalToScreen(l, 640, 350);
     for (const e of [classic, field])
       Object.assign(e.style, { left: `${tl.x}px`, top: `${tl.y}px`, width: `${br.x - tl.x}px`, height: `${br.y - tl.y}px` });
+    const rect = (e: HTMLElement, x1: number, y1: number, x2: number, y2: number) => {
+      const a = logicalToScreen(l, x1, y1);
+      const b = logicalToScreen(l, x2, y2);
+      Object.assign(e.style, { left: `${a.x}px`, top: `${a.y}px`, width: `${b.x - a.x}px`, height: `${b.y - a.y}px`, fontSize: `${(b.y - a.y) * 0.62}px` });
+    };
+    rect(brandBanner, 134, 12, 522, 55); // the ribbon of the loading screen (captions)
+    rect(brandStatus, 0, 335, 640, 350); // the copyright line of the status bar
+    brandStatus.style.fontSize = `${((br.y - tl.y) / 350) * 11}px`;
     field.style.setProperty("--u", String((br.x - tl.x) / 640));
   };
   new ResizeObserver(place).observe(root);
@@ -166,7 +182,7 @@ async function boot(): Promise<void> {
       const json = game.replay.export(game.sim.now, SIM_VERSION);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-      a.download = `shortline-${JSON.parse(json).name}.json`;
+      a.download = `parovozyky-${JSON.parse(json).name}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     },
@@ -201,6 +217,8 @@ async function boot(): Promise<void> {
       stats.frames++;
     }
     if (showClassic) screen.draw(sim, false);
+    brandBanner.hidden = !(sc === 'loading' && showClassic && sim.world.video.frameOriginY === 0);
+    brandStatus.hidden = !(showClassic && fieldScreen && !sim.world.video.statusText && !sim.halted);
     if (show3d && m === 'modern') hud.update(sim);
     const h = sim.halted;
     if (h && overlay.hidden) {
@@ -216,7 +234,7 @@ async function boot(): Promise<void> {
     }
   };
 
-  window.__shortline = {
+  window.__parovozyky = {
     game: () => game,
     version: SIM_VERSION,
     mode,
@@ -263,7 +281,7 @@ async function boot(): Promise<void> {
   const frame = (nowMs: number) => {
     const dt = Math.min((nowMs - last) * 1000, MAX_STEP_US);
     last = nowMs;
-    if (game && !document.hidden && !window.__shortline!.paused) {
+    if (game && !document.hidden && !window.__parovozyky!.paused) {
       game.target += dt;
       game.sim.advanceTo(game.target);
     }

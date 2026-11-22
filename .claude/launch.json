@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "shortline-dev",
+      "name": "parovozyky-dev",
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", "export PATH=\"$PWD/.tools/node/bin:$PATH\" && pnpm dev --port 5173 --strictPort"],
       "port": 5173

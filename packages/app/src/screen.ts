@@ -1,6 +1,6 @@
 // Classic renderer: the emulated VGA screen (640x350), the mouse cursor and
 // the tile grid of the construction mode (reSL GridOverlay), on a canvas.
-import { type Sim, uiGlyphs } from '@shortline/sim';
+import { type Sim, uiGlyphs } from '@parovozyky/sim';
 
 const W = 640;
 const H = 350;

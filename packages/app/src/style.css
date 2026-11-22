@@ -337,3 +337,30 @@ body {
   font-size: 12px;
   opacity: 0.75;
 }
+/* ---- the game name over the original pictures ---- */
+.brand {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.brand[hidden] {
+  display: none;
+}
+.brand-banner {
+  background: #fff;
+  color: #111;
+}
+.brand-status {
+  background: #aaa;
+  color: #000;
+  font-style: normal;
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+  border-top: 1px solid #000;
+}

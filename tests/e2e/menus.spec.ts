@@ -137,7 +137,7 @@ test('Player name: the start level comes from the records', async ({ page }) => 
   await page.getByText('Start as this player').click();
   await advanceUntil(page, (p) => p.screen === 'loading');
   const name = await page.evaluate(() => {
-    const b = window.__shortline!.game()!.sim.world.playerName;
+    const b = window.__parovozyky!.game()!.sim.world.playerName;
     return String.fromCharCode(...b.slice(0, b.indexOf(0)));
   });
   expect(name).toBe('Tester');

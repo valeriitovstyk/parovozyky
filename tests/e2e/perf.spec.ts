@@ -3,16 +3,16 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function setup(page: Page) {
   await page.goto('/?view=modern');
-  await expect.poll(() => page.evaluate(() => window.__shortline?.game()?.sim.world.video.screen), { timeout: 20_000 }).toBe('loading');
+  await expect.poll(() => page.evaluate(() => window.__parovozyky?.game()?.sim.world.video.screen), { timeout: 20_000 }).toBe('loading');
   await page.locator('#app').click({ position: { x: 300, y: 300 } });
-  await expect.poll(() => page.evaluate(() => window.__shortline!.game()!.sim.world.video.screen)).toBe('menu');
+  await expect.poll(() => page.evaluate(() => window.__parovozyky!.game()!.sim.world.video.screen)).toBe('menu');
   await page.waitForTimeout(1500);
   await page.keyboard.press('d'); // a demo: a world with rails
-  await expect.poll(() => page.evaluate(() => window.__shortline!.game()!.sim.world.video.screen), { timeout: 10_000 }).toBe('game');
+  await expect.poll(() => page.evaluate(() => window.__parovozyky!.game()!.sim.world.video.screen), { timeout: 10_000 }).toBe('game');
   await page.waitForTimeout(2000);
   // freeze the logic and put 20 trains x 5 carriages on the built rails
   await page.evaluate(() => {
-    const api = window.__shortline!;
+    const api = window.__parovozyky!;
     api.paused = true;
     const w = api.game()!.sim.world;
     const rails = Array.from({ length: w.railRoadCount }, (_, i) => w.railRoad[i]).map((r) => w.rail(r.tileX, r.tileY, r.railType));
@@ -32,7 +32,7 @@ async function setup(page: Page) {
 
 async function measure(page: Page, frames: number): Promise<number> {
   return page.evaluate(async (n) => {
-    const api = window.__shortline!;
+    const api = window.__parovozyky!;
     const r = api.renderer()!;
     const sim = api.game()!.sim;
     const gl = r.renderer.getContext();
@@ -58,7 +58,7 @@ test('frame time: 20 trains x 5 carriages', async ({ page }, info) => {
   const avgThrottled = await measure(page, 60);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
   const renderer = await page.evaluate(() => {
-    const gl = window.__shortline!.renderer()!.renderer.getContext();
+    const gl = window.__parovozyky!.renderer()!.renderer.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   });

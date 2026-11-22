@@ -2,7 +2,7 @@
 // input event with its virtual time = a complete, deterministic record of a
 // session. The exported JSON is a scenario of tests/golden (tools/oracle/scenario.mjs):
 // `pnpm replay <file>` runs it on the port and on the native oracle.
-import type { FileStore } from '@shortline/sim';
+import type { FileStore } from '@parovozyky/sim';
 
 type Event = [number, 'key', number, number] | [number, 'mouse', number, number, number, number];
 

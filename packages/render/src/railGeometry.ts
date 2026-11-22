@@ -1,7 +1,7 @@
 // Rail centerlines from the movement paths of the original game
 // (g_movementPaths): a rail is the polyline of its path steps, smoothed to
 // remove the pixel staircase while staying within one logical pixel.
-import { tables } from '@shortline/sim';
+import { tables } from '@parovozyky/sim';
 
 const { movementPaths } = tables;
 

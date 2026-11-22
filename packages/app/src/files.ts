@@ -2,9 +2,9 @@
 // /game/, the files written by the game (saves, results.tbl) persist in
 // IndexedDB. The simulator needs a synchronous store => everything lives in
 // memory, writes go to IndexedDB in the background.
-import { MemoryFileStore, type FileStore } from '@shortline/sim';
+import { MemoryFileStore, type FileStore } from '@parovozyky/sim';
 
-const DB_NAME = 'shortline';
+const DB_NAME = 'parovozyky';
 const STORE = 'files';
 
 function openDb(): Promise<IDBDatabase | null> {

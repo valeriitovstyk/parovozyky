@@ -22,13 +22,13 @@ for (const size of SIZES) {
       // the pointer stays away from the field: no highlight
       await expect(page).toHaveScreenshot('demo-modern.png');
       await page.evaluate(() => {
-        window.__shortline!.setMode('classic');
-        window.__shortline!.step(1);
+        window.__parovozyky!.setMode('classic');
+        window.__parovozyky!.step(1);
       });
       await expect(page).toHaveScreenshot('demo-classic.png');
       await page.evaluate(() => {
-        window.__shortline!.setMode('overlay');
-        window.__shortline!.step(1);
+        window.__parovozyky!.setMode('overlay');
+        window.__parovozyky!.step(1);
       });
       await expect(page).toHaveScreenshot('demo-overlay.png');
     });

@@ -1,4 +1,4 @@
-// game/melody.cpp. Melodies block the whole scheduler (PLAN.md 2.1.4);
+// game/melody.cpp. Melodies block the whole scheduler;
 // g_soundEnabled is always true in the logic (ToggleSound is unreachable).
 import type { Blocking } from '../core/scheduler';
 import { G } from './globals';

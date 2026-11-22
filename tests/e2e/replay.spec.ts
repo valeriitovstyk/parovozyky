@@ -23,7 +23,7 @@ test('export a replay; port and oracle agree on it', async ({ page }) => {
     await advance(page, 1);
   }
   await key(page, '3', 20);
-  const json = await page.evaluate(() => window.__shortline!.exportReplay());
+  const json = await page.evaluate(() => window.__parovozyky!.exportReplay());
   const sc = JSON.parse(json);
   expect(sc.input.length).toBeGreaterThan(5);
   mkdirSync('test-results', { recursive: true });

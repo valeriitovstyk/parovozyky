@@ -2,8 +2,8 @@
 // button), the status bar, dialogs, the manual and the records. It only
 // reads the simulator state; user actions are sent to the game as the same
 // input the original handles (keys of the dialog items, mouse clicks).
-import { DialogType, manualPages, type Sim } from '@shortline/sim';
-import { colorOf } from '@shortline/render';
+import { DialogType, manualPages, type Sim } from '@parovozyky/sim';
+import { colorOf } from '@parovozyky/render';
 import { SCANCODES } from './input';
 
 export interface HudActions {
@@ -108,7 +108,7 @@ export class Hud {
     }
 
     // status bar
-    const text = w.video.statusText || ' * SHORTLINE * Game by Andrei Snegov * (c) DOKA 1992 Moscow * Version 1.1 *';
+    const text = w.video.statusText || 'Паровозики';
     if (text !== this.statusKey) {
       this.statusKey = text;
       this.status.textContent = text;

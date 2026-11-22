@@ -1,5 +1,5 @@
-// ShortLine deterministic simulator (no DOM, no wall clock, no Math.random).
-export const SIM_VERSION = '0.1.0';
+// Паровозики: the deterministic simulator (no DOM, no wall clock, no Math.random).
+export const SIM_VERSION = '1.0.0';
 export { createSim, type Sim, type SimOptions } from './sim';
 export { MemoryFileStore, type FileStore } from './files';
 export type { InputEvent } from './core/machine';

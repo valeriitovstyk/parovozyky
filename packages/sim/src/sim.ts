@@ -1,4 +1,4 @@
-// Public simulator API (PLAN.md 3.1).
+// Public simulator API.
 import { type InputEvent, Machine, type MachineObserver } from './core/machine';
 import { Rng } from './core/rng';
 import { SimHalt, type TaskGen } from './core/scheduler';

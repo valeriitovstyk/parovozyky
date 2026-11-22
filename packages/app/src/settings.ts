@@ -10,12 +10,12 @@ export interface SettingsData {
   view: ViewMode;
 }
 
-const KEY = 'shortline.settings';
+const KEY = 'parovozyky.settings';
 
 export function loadSettings(): SettingsData {
   const def: SettingsData = { playerName: 'Unknown', sound: true, shadows: true, view: 'modern' };
   try {
-    const legacy = localStorage.getItem('shortline.playerName');
+    const legacy = localStorage.getItem('parovozyky.playerName');
     const s = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<SettingsData> | null;
     return { ...def, ...(legacy ? { playerName: legacy } : {}), ...(s ?? {}) };
   } catch {
@@ -121,7 +121,7 @@ export class Settings {
     const help = document.createElement('p');
     help.className = 'help';
     help.textContent =
-      'Left click: switch / semaphore, next rail type. Right click: call the server / build. Both buttons or Space: mode. ' +
+      'Паровозики 1.0. Left click: switch / semaphore, next rail type. Right click: call the server / build. Both buttons or Space: mode. ' +
       '1/2/3: speed. Touch: tap = left, long tap = right, swipe = mode.';
     panel.append(help);
   }

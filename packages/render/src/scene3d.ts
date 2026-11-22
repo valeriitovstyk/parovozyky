@@ -1,7 +1,7 @@
 // Modern renderer: a Three.js scene built from the simulator state (read only).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { type Sim, type World } from '@shortline/sim';
+import { type Sim, type World } from '@parovozyky/sim';
 import { cameraSetup, layoutFor, type Layout, worldFromLogical } from './projection';
 import { centerline, tileOrigin } from './railGeometry';
 import { PALETTE, colorOf } from './palette';

@@ -134,7 +134,7 @@ export function scheduleAllTrainsRedrawing(): void {
   for (const train of G.trains) train.needToRedraw = true;
 }
 
-/* 18fa:08d6 — computes carriage.rect / drawingPriority / direction (PLAN.md 2.1.1) */
+/* 18fa:08d6 — computes carriage.rect / drawingPriority / direction */
 export function drawTrainList(c: Carriage | null): void {
   let bb = 0;
   let shadowBufPtr = VIDEO_MEM_SHADOW_BUFFER;

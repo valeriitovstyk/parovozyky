@@ -202,10 +202,10 @@ importers:
 
   packages/app:
     dependencies:
-      '@shortline/render':
+      '@parovozyky/render':
         specifier: workspace:*
         version: link:../render
-      '@shortline/sim':
+      '@parovozyky/sim':
         specifier: workspace:*
         version: link:../sim
     devDependencies:
@@ -215,7 +215,7 @@ importers:
 
   packages/render:
     dependencies:
-      '@shortline/sim':
+      '@parovozyky/sim':
         specifier: workspace:*
         version: link:../sim
       three:

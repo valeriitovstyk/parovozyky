@@ -15,7 +15,7 @@ interface Probe {
 
 async function probe(page: Page): Promise<Probe> {
   return page.evaluate(() => {
-    const g = window.__shortline?.game();
+    const g = window.__parovozyky?.game();
     if (!g) return { screen: 'none', money: 0, entrances: 0, trains: 0, demo: false, userFiles: [], halted: null, status: '' };
     const w = g.sim.world;
     return {

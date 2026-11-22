@@ -1,5 +1,5 @@
 // Fixed-width integer helpers. Every assignment to a field that has an
-// explicit C width goes through one of these (see PLAN.md 2.4).
+// explicit C width goes through one of these (see ).
 
 export const i8 = (v: number): number => (v << 24) >> 24;
 export const u8 = (v: number): number => v & 0xff;

@@ -1,12 +1,13 @@
 {
-  "name": "@shortline/render",
+  "name": "@parovozyky/render",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@shortline/sim": "workspace:*",
+    "@parovozyky/sim": "workspace:*",
     "three": "^0.187.0"
   },
   "devDependencies": {
