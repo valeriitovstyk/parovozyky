@@ -1,7 +1,9 @@
 // Modern renderer: a Three.js scene built from the simulator state (read only).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { type Sim, type World } from '@parovozyky/sim';
+import { type Sim, type World, tables } from '@parovozyky/sim';
+
+const { allowedRailCursorTypes } = tables;
 import { cameraSetup, layoutFor, type Layout, worldFromLogical } from './projection';
 import { centerline, tileOrigin } from './railGeometry';
 import { PALETTE, colorOf } from './palette';
@@ -54,6 +56,9 @@ function ribbon(points: THREE.Vector3[], offsetA: number, offsetB: number, h: nu
 }
 
 const SLEEPER = new THREE.BoxGeometry(BALLAST_HALF * 1.6, 1.2, 2.2);
+const STOP_POST = new THREE.BoxGeometry(1.6, 8, 1.6);
+const STOP_BEAM = new THREE.BoxGeometry(BALLAST_HALF * 1.5, 3, 1.6);
+const STOP_STRIPE = new THREE.BoxGeometry(BALLAST_HALF * 0.5, 3.1, 0.3);
 const TRUNK = new THREE.CylinderGeometry(1.4, 1.8, 7, 6);
 const CROWN = new THREE.ConeGeometry(7, 18, 7);
 const ROUND = new THREE.SphereGeometry(8, 8, 6);
@@ -88,6 +93,8 @@ export class ModernRenderer {
   private readonly trainGroup = new THREE.Group();
   private readonly fxGroup = new THREE.Group();
   private readonly gridLines: THREE.LineSegments;
+  /** construction mode: the area where nothing can be built (dimmed) */
+  private readonly blocked: THREE.Mesh;
   private readonly cursorGroup = new THREE.Group();
   /** logical pointer position: the switch/semaphore/entrance a click would act on is highlighted */
   pointer: { x: number; y: number } | null = null;
@@ -154,6 +161,8 @@ export class ModernRenderer {
     this.scene.add(ground);
 
     this.gridLines = this.buildGrid();
+    this.blocked = this.buildBlockedArea();
+    this.scene.add(this.blocked);
     this.highlight.renderOrder = 10;
     this.scene.add(this.highlight);
     this.scene.add(this.gridLines, this.railGroup, this.objectGroup, this.signalGroup, this.trainGroup, this.fxGroup, this.cursorGroup);
@@ -195,6 +204,7 @@ export class ModernRenderer {
     this.updateTrains(w, sim.now, nowMs);
     this.updateFx(nowMs);
     this.gridLines.visible = w.gridVisible;
+    this.blocked.visible = w.gridVisible;
     this.updateHighlight(w);
     this.renderer.render(this.scene, this.camera);
   }
@@ -228,6 +238,9 @@ export class ModernRenderer {
     for (const k of built) {
       const r = w.rail(k.tileX, k.tileY, k.type);
       this.addTrack(layers, r, r.minPathStep, r.maxPathStep, 'built');
+      // a buffer stop at every free end: here the network can be extended
+      // (the classic view draws the impasse sign, drawImpasse)
+      for (let slot = 0; slot < 2; ++slot) if (!r.connections[slot].rail) this.addBufferStop(layers, r, slot);
     }
     for (const st of this.stages.values()) {
       if (builtSet.has(railKey(st.key))) continue;
@@ -305,6 +318,26 @@ export class ModernRenderer {
     if (hi <= lo) return;
     const steel = pts.slice(lo, hi + 1);
     for (const sgn of [-1, 1]) layers.steel.push(ribbon(steel, sgn * STEEL_GAUGE - 0.7, sgn * STEEL_GAUGE + 0.7, 2));
+  }
+
+  private addBufferStop(layers: Layers, rail: { x: number; y: number; type: number }, slot: number): void {
+    const n = centerline(rail.type).length;
+    const end = slot ? n - 1 : 0;
+    const inner = slot ? n - 4 : 3;
+    const p = railPoint(rail, end);
+    const q = railPoint(rail, inner);
+    const ang = Math.atan2(p.x - q.x, p.z - q.z);
+    const s = Math.sin(ang);
+    const c = Math.cos(ang);
+    const at = (along: number, side: number, h: number) => ({ x: q.x + s * along + c * side, z: q.z + c * along - s * side, h });
+    for (const side of [-STEEL_GAUGE, STEEL_GAUGE]) {
+      const pt = at(0, side, 4);
+      layers.sleepers.add(STOP_POST, 0x3a3a3a, trs(pt.x, pt.h, pt.z, ang));
+    }
+    const beam = at(0, 0, 8);
+    layers.sleepers.add(STOP_BEAM, 0xd8261c, trs(beam.x, beam.h, beam.z, ang));
+    const stripe = at(0.9, 0, 8);
+    layers.sleepers.add(STOP_STRIPE, 0xffffff, trs(stripe.x, stripe.h, stripe.z, ang));
   }
 
   // ---- houses and trees -------------------------------------------------------
@@ -409,6 +442,40 @@ export class ModernRenderer {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x648b3c, transparent: true, opacity: 0.8 }));
+  }
+
+  /**
+   * Tiles where no rail type is allowed (g_allowedRailCursorTypes == 0) and
+   * everything outside the 11x11 map: the construction cursor never goes
+   * there. A tile cell is the rhombus between the origins of (tx, ty),
+   * (tx+1, ty), (tx+1, ty+1) and (tx, ty+1).
+   */
+  private buildBlockedArea(): THREE.Mesh {
+    const pos: number[] = [];
+    const corner = (tx: number, ty: number) => {
+      const o = tileOrigin(tx, ty);
+      const p = worldFromLogical(o.x, o.y);
+      return [p.x, 0.4, p.z];
+    };
+    for (let tx = -14; tx < 25; ++tx)
+      for (let ty = -14; ty < 25; ++ty) {
+        const inside = tx >= 0 && tx < 11 && ty >= 0 && ty < 11;
+        if (inside && allowedRailCursorTypes[tx * 11 + ty]) continue;
+        const a = corner(tx, ty);
+        const b = corner(tx + 1, ty);
+        const c = corner(tx + 1, ty + 1);
+        const d = corner(tx, ty + 1);
+        pos.push(...a, ...d, ...b, ...b, ...d, ...c);
+      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const m = new THREE.Mesh(
+      g,
+      new THREE.MeshBasicMaterial({ color: 0x0b1405, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    m.renderOrder = 1;
+    m.visible = false;
+    return m;
   }
 
   private updateCursor(w: World): void {
