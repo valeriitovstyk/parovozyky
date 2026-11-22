@@ -74,7 +74,11 @@ export class ClassicScreen {
     this.pixels32 = new Uint32Array(this.image.data.buffer);
   }
 
-  draw(sim: Sim): void {
+  /**
+   * `fieldOnly`: modern mode — only the header, the status bar and an open
+   * dialog are drawn, the game field is transparent (the 3D scene shows through).
+   */
+  draw(sim: Sim, fieldTransparent = false): void {
     const palette = sim.renderIndexed(this.indexed);
     if (!palette) return;
     // ARGB -> canvas RGBA (little endian: ABGR in a Uint32)
@@ -87,6 +91,14 @@ export class ClassicScreen {
       const c = idx[i];
       // the palette colour 0 (green) is transparent in reSL: overlays show through it
       px[i] = c === 0 && grid && this.grid[i] ? gridColor : pal[c];
+    }
+    if (fieldTransparent) {
+      const d = sim.world.dialogArea;
+      const dlg = sim.world.video.dialog >= 0;
+      for (let y = 47; y < 334; ++y) {
+        const inDlgY = dlg && y >= d.y1 && y < d.y2;
+        for (let x = 0; x < W; ++x) if (!(inDlgY && x >= d.x1 && x < d.x2)) px[y * W + x] = 0;
+      }
     }
     this.ctx.putImageData(this.image, 0, 0);
     const mouse = sim.world.m.mouse;

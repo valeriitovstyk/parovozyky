@@ -105,6 +105,17 @@ class DialogMouseHandler {
 
 /* 15e8:03b7 */
 export function* handleDialog(type: DialogType, defaultChoice: number | null = null): Blocking<number> {
+  // presentation: the dialog is on the screen while it is handled
+  const prevDialog = G.video.dialog;
+  G.video.dialog = type;
+  try {
+    return yield* handleDialogImpl(type, defaultChoice);
+  } finally {
+    G.video.dialog = prevDialog;
+  }
+}
+
+function* handleDialogImpl(type: DialogType, defaultChoice: number | null): Blocking<number> {
   const dlg = G.dialogs[type];
   let timeout = 700;
   let itemsCount = 0;

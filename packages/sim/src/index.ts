@@ -8,3 +8,7 @@ export { collectState, hashSections, sectionsJson, TraceRecorder, type Section }
 export type { SimEvent } from './game/globals';
 export { serializeGame } from './game/savefile';
 export { uiGlyphs } from './data/glyphs';
+export * as tables from './data/tables';
+export * as glyphTables from './data/glyphs';
+export { Color, CarriageType, StaticObjectKind, INNER_ENTRANCE_RAIL_TYPE } from './game/types';
+export type { World } from './game/globals';

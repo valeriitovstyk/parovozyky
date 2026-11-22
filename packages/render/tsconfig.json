@@ -8,7 +8,10 @@
       "DOM"
     ],
     "tsBuildInfoFile": "../../.build/tsc/render.tsbuildinfo",
-    "emitDeclarationOnly": true
+    "emitDeclarationOnly": true,
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src",

@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  --bg: #111;
+  --bg: #1d2e12;
 }
 html,
 body {
@@ -9,29 +9,38 @@ body {
   background: var(--bg);
   color: #eee;
   font: 16px system-ui, sans-serif;
+  overflow: hidden;
 }
 #app {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+  cursor: none;
+  touch-action: none;
+  user-select: none;
+}
+#gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   height: 100%;
 }
 #screen {
-  /* the original 640x350 picture was shown on a 4:3 monitor */
-  width: min(100vw, calc(100vh * 4 / 3));
-  aspect-ratio: 4 / 3;
+  /* the original 640x350 picture on a 4:3 monitor; placed by main.ts */
+  position: absolute;
   image-rendering: pixelated;
-  cursor: none;
-  touch-action: none;
+  pointer-events: none;
 }
 #overlay {
   position: absolute;
-  inset: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   padding: 24px 32px;
   background: rgba(0, 0, 0, 0.8);
   border: 1px solid #555;
   text-align: center;
+  cursor: default;
 }
 #overlay button {
   font: inherit;

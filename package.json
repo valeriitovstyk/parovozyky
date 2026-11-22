@@ -19,7 +19,8 @@
     "extract": "bash tools/extract/extract.sh",
     "test:golden": "vitest run --project golden",
     "test:screens": "vitest run --project oracle",
-    "e2e": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test"
+    "e2e": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project smoke",
+    "perf": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project perf --reporter=list"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

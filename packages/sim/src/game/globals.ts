@@ -185,6 +185,8 @@ export class World {
     loadingTitle: 0,
     manualPage: 0,
     records: null as null | { byTrains: RecordView[]; byYears: RecordView[] },
+    /** the dialog being handled (handleDialog) or -1 */
+    dialog: -1,
   };
 
   // ---- savefile ----

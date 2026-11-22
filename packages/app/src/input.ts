@@ -24,12 +24,16 @@ export interface InputSink {
   gesture(): void;
 }
 
-export function attachInput(canvas: HTMLCanvasElement, sink: InputSink): () => void {
+/** maps a point of `el` (CSS pixels relative to it) to logical coordinates */
+export type ToLogical = (px: number, py: number) => { x: number; y: number };
+
+export function attachInput(canvas: HTMLElement, sink: InputSink, toLogical: ToLogical): () => void {
   let buttons = 0;
   const pos = (e: PointerEvent | MouseEvent) => {
     const r = canvas.getBoundingClientRect();
-    const x = Math.floor(((e.clientX - r.left) * 640) / r.width);
-    const y = Math.floor(((e.clientY - r.top) * 350) / r.height);
+    const l = toLogical(e.clientX - r.left, e.clientY - r.top);
+    const x = Math.floor(l.x);
+    const y = Math.floor(l.y);
     return [Math.max(0, Math.min(639, x)), Math.max(0, Math.min(349, y))] as const;
   };
   const onMove = (e: PointerEvent) => {
@@ -39,7 +43,7 @@ export function attachInput(canvas: HTMLCanvasElement, sink: InputSink): () => v
   const onDown = (e: PointerEvent) => {
     sink.gesture();
     e.preventDefault();
-    canvas.setPointerCapture(e.pointerId);
+    if ('setPointerCapture' in canvas) canvas.setPointerCapture(e.pointerId);
     const [x, y] = pos(e);
     if (e.button === 0) {
       buttons |= 1;
