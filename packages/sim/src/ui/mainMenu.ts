@@ -12,7 +12,11 @@ import { findNextSaveFile, lastSearchResult, loadSavedGame } from '../game/savef
 import { drawStaticObjects } from '../game/staticObject';
 import { spawnNewTrain } from '../game/train';
 import { DialogType, ME_LEFTRELEASED, ME_RIGHTRELEASED } from '../game/types';
-import { CloseButton, toggleButtonState } from './buttons';
+import { CloseButton, MenuButton, toggleButtonState } from './buttons';
+import { copyRectangle, dialogFrame, drawText, drawTextSmall, filledRectangle, imageDot7, setVideoModeR0W2 } from '../gfx/draw';
+import { Color } from '../game/types';
+import { drawCopyright } from './statusBar';
+import type { RecordView } from '../game/records';
 import { alert, drawDialog, handleDialog } from './dialog';
 import { setHeaderValues } from './drawHeader';
 import { animateScreenShifting, copyScreenBufferTo, setVideoFrameOrigin } from './screens';
@@ -125,7 +129,7 @@ function* showArchiveMenu(): Blocking<ArchiveMenuAction> {
             /* 15e8:07d6 */
             // [G]o
             yield* setVideoFrameOrigin(0, 350);
-            // eraseArchiveMenu(0): drawing only
+            eraseArchiveMenu(0);
             yield* setVideoFrameOrigin(0, 0);
             fillGameFieldBackground(350);
             drawFieldBackground(350);
@@ -192,7 +196,7 @@ export function* mainMenu(): Blocking {
         if (loadDemo()) {
           G.isDemoMode = true;
           drawWorld();
-          // MenuButton::draw(350): drawing only
+          MenuButton.draw(350);
           G.video.screen = 'game';
           yield* animateScreenShifting();
           copyScreenBufferTo(0);
@@ -227,9 +231,10 @@ export function* mainMenu(): Blocking {
         // [R] Records
         G.video.screen = 'records';
         G.video.records = recordsScreenData();
-        G.textSpacing = 2; // showRecordsScreen
+        drawRecordsScreen(G.video.records); // showRecordsScreen (sets g_textSpacing = 2)
         const closeBtn = new CloseButton();
         try {
+          CloseButton.draw(350);
           yield* animateScreenShifting();
           copyScreenBufferTo(0);
           yield* setVideoFrameOrigin(0, 0);
@@ -269,8 +274,41 @@ export function exitWithMessage(msg: string): never {
 
 /* 132d:00b6 */
 export function drawMainMenuBackground(yOffset: number): void {
-  // play.7: drawing only
+  imageDot7(0, yOffset, 640, 350, G.vga ? G.files.read('play.7') : null);
   drawStaticObjects(yOffset);
+  drawCopyright(yOffset);
+}
+
+/* 132d:03ea */
+function eraseArchiveMenu(yOffset: number): void {
+  let dstY = 47;
+  let srcY = 397;
+  if (yOffset) {
+    dstY = 397;
+    srcY = 47;
+  }
+  copyRectangle(0, dstY, 0, srcY, 80, 287);
+  setVideoModeR0W2();
+}
+
+/* 174e:0266 — the drawing part of showRecordsScreen */
+function drawRecordsScreen(data: { byTrains: RecordView[]; byYears: RecordView[] }): void {
+  G.textSpacing = 2;
+  if (!G.vga) return;
+  filledRectangle(0, 350, 80, 350, 0xff, Color.Red);
+  dialogFrame(98, 367, 56, 151, Color.Gray);
+  dialogFrame(98, 545, 56, 151, Color.Gray);
+  drawText(153, 352, '* THE BEST DISPATCHERS *', Color.Black);
+  drawTextSmall(114, 370, ' #  Name           Trains   Money   Year   Level', Color.Black);
+  drawText(169, 530, '* THE BEST MANAGERS *', Color.Black);
+  drawTextSmall(114, 548, ' #  Name        Level : Year   Money   Trains', Color.Black);
+  const p = (v: number | string, n: number) => String(v).padStart(n);
+  data.byTrains.forEach((r, i) =>
+    drawTextSmall(114, (i + 2) * 12 + 370,
+      `${p(i + 1, 2)}. ${r.name.padEnd(14)} ${p(r.trains, 6)} ${p(r.money, 4)},000 ${p(r.year, 6)} ${p(r.level, 2)}`, Color.Black));
+  data.byYears.forEach((r, i) =>
+    drawTextSmall(114, (i + 2) * 12 + 548,
+      `${p(i + 1, 2)}. ${r.name.padEnd(14)} ${p(r.level, 2)} : ${p(r.year, 4)} ${p(r.money, 4)},000 ${p(r.trains, 5)}`, Color.Black));
 }
 
 /* 16a6:065f */

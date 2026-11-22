@@ -16,6 +16,27 @@ const traitsBody = textCpp.match(/g_charTraits\[256\]\s*=\s*\{([^}]*)\}/)[1];
 const charTraits = traitsBody.split(',').map((s) => s.trim()).filter(Boolean).map((s) => Number(s));
 if (charTraits.length !== 256) throw new Error(`g_charTraits: expected 256 values, got ${charTraits.length}`);
 
+// ui/components/button.cpp and system/driver/sdl/mouse.cpp: glyphs defined in
+// the code (not in game/resources) => parsed from the sources
+function parseArray(file, name) {
+  const src = readFileSync(join(ROOT, 'reference/reSL/src', file), 'utf8');
+  const m = src.match(new RegExp(name + '(?:\\[\\])?\\s*=\\s*\\{([^}]*)\\}'));
+  if (!m) throw new Error(`${name} not found in ${file}`);
+  return m[1].split(',').map((x) => x.trim()).filter(Boolean).map((x) => Number(x));
+}
+const uiGlyphs = {
+  menuItem1: [3, 21, ...parseArray('ui/components/button.cpp', 'g_menuItemGlyph1')],
+  menuItem2: [4, 21, ...parseArray('ui/components/button.cpp', 'g_menuItemGlyph2')],
+  menuItem3: [4, 21, ...parseArray('ui/components/button.cpp', 'g_menuItemGlyph3')],
+  firstMenuItemTextArea: [3, 15, ...parseArray('ui/components/button.cpp', 'g_firstMenuItemTextArea')],
+  cursor1: parseArray('system/driver/sdl/mouse.cpp', 'g_cursorGlyph1'),
+  cursor2: parseArray('system/driver/sdl/mouse.cpp', 'g_cursorGlyph2'),
+};
+for (const [k, v] of Object.entries(uiGlyphs)) {
+  const expected = k.startsWith('cursor') ? 32 : 2 + v[0] * v[1];
+  if (v.length !== expected) throw new Error(`${k}: ${v.length} values, expected ${expected}`);
+}
+
 const LOGIC_KEYS = [
   'allowedRailCursorTypes', 'carriageYBiases', 'chunkBoundingBoxes', 'entranceRails', 'entranceColors',
   'movementPaths', 'railConnectionBiases', 'railConnectionRules', 'railTypeMeta', 'semaphoreGlyphBiases',
@@ -41,5 +62,6 @@ writeFileSync(join(outDir, 'tables.ts'),
   `/** Order of tables in the C++ dump (the hash covers all of them in this order) */\nexport const TABLE_ORDER = ${JSON.stringify(keys)} as const;\n\n` +
   emit(LOGIC_KEYS) +
   `\n/** graphics/text.cpp g_charTraits (1d7d:2969) */\nexport const charTraits = ${JSON.stringify(charTraits)} as const;\n`);
-writeFileSync(join(outDir, 'glyphs.ts'), header('Bitmaps (presentation only).') + '\n' + emit(glyphKeys));
+writeFileSync(join(outDir, 'glyphs.ts'), header('Bitmaps (presentation only).') + '\n' + emit(glyphKeys) +
+  `\n/** ui/components/button.cpp, system/driver/sdl/mouse.cpp (parsed from the sources) */\nexport const uiGlyphs = ${JSON.stringify(uiGlyphs)} as const;\n`);
 console.log(`wrote tables.ts (${LOGIC_KEYS.length} tables) and glyphs.ts (${glyphKeys.length} tables)`);

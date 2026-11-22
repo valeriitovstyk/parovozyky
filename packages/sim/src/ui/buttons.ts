@@ -3,7 +3,9 @@ import type { HandlerHolder, MouseEvent } from '../core/machine';
 import type { Blocking } from '../core/scheduler';
 import { G } from '../game/globals';
 import { playEntitySwitchedSound, waitForNRetraces } from '../game/melody';
-import { ME_LEFTRELEASED } from '../game/types';
+import { Color, ME_LEFTRELEASED } from '../game/types';
+import { drawGlyph, drawText, filledRectangle, horizontalLine, setDataRotation } from '../gfx/draw';
+import { uiGlyphs } from '../gfx/res';
 
 /** g_menuItemGlyph1: 3 bytes x 21 rows */
 export function buttonHeight(): number {
@@ -13,9 +15,21 @@ export function buttonWidth(): number {
   return 3 * 8;
 }
 
+export function drawButton(x: number, y: number, caption: string | null): void {
+  if (!G.vga) return;
+  drawGlyph(uiGlyphs.menuItem1, x, y, Color.White);
+  drawGlyph(uiGlyphs.menuItem2, x, y, Color.Gray);
+  drawGlyph(uiGlyphs.menuItem3, x, y, Color.Black);
+  if (caption) drawText(x + 7, y + 5, caption, Color.Black);
+}
+
 /* 15e8:047b */
-export function toggleButtonState(_x: number, _y: number): void {
-  // XOR highlight: drawing only
+export function toggleButtonState(x: number, y: number): void {
+  if (!G.vga) return;
+  if (y > 350) y -= 350;
+  setDataRotation(0x18); // rotation = 0, mode = XOR
+  drawGlyph(uiGlyphs.firstMenuItemTextArea, x + 4, y + 3, Color.Yellow);
+  setDataRotation(0);
 }
 
 const MENU_BUTTON_X = 600;
@@ -49,11 +63,30 @@ export class MenuButton {
   disable(): void {
     if (!this.enabled) return;
     this.enabled = false;
+    // erase()
+    filledRectangle(MENU_BUTTON_X, MENU_BUTTON_Y, buttonWidth() / 8 + 1, buttonHeight(), 0xff, Color.Gray);
   }
 
   enable(): void {
     if (this.enabled) return;
     this.enabled = true;
+    MenuButton.draw(0);
+  }
+
+  static draw(yOffset = 0): void {
+    if (!G.vga) return;
+    drawButton(MENU_BUTTON_X, MENU_BUTTON_Y + yOffset, null);
+    // a "hamburger" icon
+    const x1 = MENU_BUTTON_X + 8;
+    const x2 = x1 + 11 - 1;
+    let y = MENU_BUTTON_Y + 5 + yOffset;
+    for (let l = 0; l < 3; ++l) {
+      for (let i = 0; i < 3; ++i) {
+        horizontalLine(x1, x2, y, Color.Black);
+        ++y;
+      }
+      y += 1;
+    }
   }
 
   *click(): Blocking {
@@ -99,6 +132,10 @@ export class CloseButton {
 
   destroy(): void {
     this.handler.remove();
+  }
+
+  static draw(yOffset: number): void {
+    drawButton(CLOSE_BUTTON_X, CLOSE_BUTTON_Y + yOffset, 'X');
   }
 
   *click(): Blocking {

@@ -12,6 +12,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'oracle',
+          include: ['tests/oracle/**/*.test.ts'],
+          environment: 'node',
+          testTimeout: 600_000,
+        },
+      },
+      {
+        test: {
           name: 'golden',
           include: ['tests/golden/**/*.test.ts'],
           environment: 'node',

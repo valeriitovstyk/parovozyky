@@ -3,7 +3,9 @@ import { i16, i8 } from '../core/ints';
 import { G } from './globals';
 import { railConnectionBias, railTypeMeta, semaphoreGlyphBias } from './res';
 import { roadMaskInTile } from './rail';
-import type { Rail, RailInfo, Semaphore, SemaphoreType } from './types';
+import { Color, type Rail, type RailInfo, type Semaphore, type SemaphoreType } from './types';
+import { drawGlyphW16, drawGlyphW8 } from '../gfx/draw';
+import { semaphoreGlyph } from '../gfx/res';
 
 /* 17bf:0621 */
 function createSemaphore(r: Rail, type: SemaphoreType): void {
@@ -128,4 +130,31 @@ export function findClosestSemaphore(x: number, y: number): Semaphore | null {
     }
   }
   return res;
+}
+
+// ---- drawing (137c:0135, 137c:01d3) ----
+
+/* 137c:0135 */
+export function drawSemaphore(s: Semaphore, yOffset: number): void {
+  if (!G.vga) return;
+  const g = semaphoreGlyph(s.glyph);
+  const x = s.pixelX + g.xOffset;
+  const y = s.pixelY + g.yOffset + yOffset;
+  G.glyphHeight = 15;
+  drawGlyphW8(g.d, g.bg1, x, y, Color.White);
+  drawGlyphW8(g.d, g.bg2, x, y, Color.Black);
+  G.glyphHeight = 4;
+  drawGlyphW16(g.d, g.light, x + g.lightXOffset, y + g.lightYOffset, s.isRed ? Color.Red : Color.LightGreen);
+}
+
+/* 137c:01d3 */
+export function eraseSemaphore(s: Semaphore, yOffset: number): void {
+  if (!G.vga) return;
+  const g = semaphoreGlyph(s.glyph);
+  const x = s.pixelX + g.xOffset;
+  const y = s.pixelY + g.yOffset + yOffset;
+  G.glyphHeight = 15;
+  drawGlyphW8(g.d, g.bg1, x, y, Color.Green);
+  G.glyphHeight = 4;
+  drawGlyphW16(g.d, g.light, x + g.lightXOffset, y + g.lightYOffset, Color.Green);
 }

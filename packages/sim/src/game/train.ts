@@ -5,13 +5,18 @@ import { addWaitingTrain, entranceIsFree } from './entrance';
 import { G, SpawnCancelled, pathStep, ub } from './globals';
 import { moveAlongPath } from './moveTrains';
 import { carriageYBias, trainGlyph, trainSpecification } from './res';
+import { VIDEO_MEM_SHADOW_BUFFER, copyFromShadowBuffer, copySpriteToShadowBuffer, drawGlyph, setVideoModeR0W1, setVideoModeR0W2 } from '../gfx/draw';
+import { trainGlyphBitmaps } from '../gfx/res';
+import { modeClear, modeDraw } from './mouse';
 import { showStatusMessage } from '../ui/statusBar';
 import { drawDispatcher } from '../ui/drawHeader';
 import {
   BLINKING_TRAIN_ENTRANCE_IDX,
   type Carriage,
   CarriageType,
+  Color,
   HeaderFieldId,
+  INNER_ENTRANCE_RAIL_TYPE,
   SERVER_ENTRANCE_IDX,
   type Train,
   setEmptyRectangle,
@@ -132,6 +137,7 @@ export function scheduleAllTrainsRedrawing(): void {
 /* 18fa:08d6 — computes carriage.rect / drawingPriority / direction (PLAN.md 2.1.1) */
 export function drawTrainList(c: Carriage | null): void {
   let bb = 0;
+  let shadowBufPtr = VIDEO_MEM_SHADOW_BUFFER;
   for (; c; c = c.next) {
     const rail = c.location.rail;
     if (!rail || rail.id === 1) ub('drawTrainList: invalid rail');
@@ -156,7 +162,23 @@ export function drawTrainList(c: Carriage | null): void {
       if (c.rect.y1 < box.y1) box.y1 = c.rect.y1;
       if (c.rect.y2 > box.y2) box.y2 = c.rect.y2;
     }
-    // copySpriteToShadowBuffer / drawGlyph: drawing only
+    if (G.vga) {
+      setVideoModeR0W1();
+      shadowBufPtr = copySpriteToShadowBuffer(
+        shadowBufPtr,
+        c.rect.x1,
+        c.rect.y1 + 350,
+        ((c.rect.x2 - 1) >> 3) - (c.rect.x1 >> 3) + 1,
+        glyph.height,
+      );
+      setVideoModeR0W2();
+      if (rail.type !== INNER_ENTRANCE_RAIL_TYPE) {
+        const [g1, g2, g3] = trainGlyphBitmaps(c.type, p.angle, c.direction);
+        drawGlyph(g1, c.rect.x1, c.rect.y1 + 350, Color.Black);
+        drawGlyph(g2, c.rect.x1, c.rect.y1 + 350, G.entrances[c.dstEntranceIdx].bgColor);
+        drawGlyph(g3, c.rect.x1, c.rect.y1 + 350, G.entrances[c.dstEntranceIdx].fgColor);
+      }
+    }
     ++bb;
   }
 }
@@ -167,8 +189,13 @@ export function drawTrains(): void {
 }
 
 /* 132d:0002 */
-export function eraseTrain(_train: Train): void {
-  // drawing only
+export function eraseTrain(train: Train): void {
+  if (!G.vga) return;
+  modeClear(G.mode!);
+  setVideoModeR0W1();
+  for (let i = 0; i < train.carriageCnt; ++i) copyFromShadowBuffer(train.carriages[i].rect);
+  setVideoModeR0W2();
+  modeDraw(G.mode!);
 }
 
 /* 19de:0797 */

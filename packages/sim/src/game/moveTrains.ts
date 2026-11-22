@@ -6,6 +6,17 @@ import { G, pathStep, ub } from './globals';
 import { spendMoney, startHeaderFieldAnimation } from './header';
 import { playFixRoadMelody, playTrainFinishedMelody } from './melody';
 import { trainGlyph } from './res';
+import { drawSemaphore } from './semaphore';
+import { modeClear, modeDraw } from './mouse';
+import {
+  VIDEO_MEM_SHADOW_BUFFER,
+  copyFromShadowBuffer,
+  copySpriteFromShadowBuffer,
+  line,
+  setDataRotation,
+  setVideoModeR0W1,
+  setVideoModeR0W2,
+} from '../gfx/draw';
 import { drawTrainList, eraseTrain, scheduleTrainsDrawing } from './train';
 import { showStatusMessage } from '../ui/statusBar';
 import {
@@ -13,6 +24,7 @@ import {
   CRASHED_TRAIN_ENTRANCE_IDX,
   type Carriage,
   CarriageType,
+  Color,
   DISABLED_SWITCH_PATH,
   HeaderFieldId,
   INNER_ENTRANCE_RAIL_TYPE,
@@ -119,22 +131,29 @@ function carriagePosition(loc: Location): { x: number; y: number } {
 function* animateCollisionAndPlaySound(pos: { x: number; y: number }): Blocking {
   G.emit({ type: 'explosion', x: pos.x, y: pos.y });
   const rng = G.rng;
+  setDataRotation(0x18); // rotation = 0, mode = XOR
+  const x1: number[] = [];
+  const y1: number[] = [];
+  const x2: number[] = [];
+  const y2: number[] = [];
   for (let i = 0; i < 125; ++i) {
-    rng.symmetricRand(5); // x1[i]
-    rng.symmetricRand(3); // y1[i]
-    rng.symmetricRand(Math.trunc(i / 2) + 1); // x2[i]
-    rng.symmetricRand(Math.trunc(i / 2) + 1); // y2[i]
-    // graphics::line (XOR): drawing only
+    x1[i] = i16(pos.x + rng.symmetricRand(5));
+    y1[i] = i16(pos.y + rng.symmetricRand(3));
+    x2[i] = i16(pos.x + rng.symmetricRand(Math.trunc(i / 2) + 1));
+    y2[i] = i16(pos.y + rng.symmetricRand(Math.trunc(i / 2) + 1));
+    line(x1[i], y1[i], x2[i], y2[i], Color.White);
     const freq = rng.genRandomNumber(i * 16 + 1);
     G.m.sound(u16(freq + 30));
     yield* G.m.driverSleep(1); // activeSleep(1)
   }
   for (let i = 0; i < 125; ++i) {
+    line(x1[i], y1[i], x2[i], y2[i], Color.White);
     const freq = rng.genRandomNumber(i * 16 + 1);
     G.m.sound(u16(freq + 30));
     yield* G.m.driverSleep(1);
   }
   G.m.nosound();
+  setDataRotation(0); // default mode - simple copying without rotation
 }
 
 /* 18fa:023d */
@@ -257,6 +276,7 @@ export function* moveTrain(train: Train, dTime: number): Blocking<boolean> {
     ) {
       // the train has reached the entrance
       deleteTrain(train);
+      G.emit({ type: 'trainFinished', x: Math.trunc((rect.x1 + rect.x2) / 2), y: Math.trunc((rect.y1 + rect.y2) / 2) });
       drawEraseTrainFinishedExclamation(Math.trunc((rect.x1 + rect.x2) / 2), Math.trunc((rect.y1 + rect.y2) / 2));
       yield* playTrainFinishedMelody(train.carriageCnt);
       if (train.carriages[0].type === CarriageType.Server) showStatusMessage('Server went out');
@@ -264,7 +284,9 @@ export function* moveTrain(train: Train, dTime: number): Blocking<boolean> {
         startHeaderFieldAnimation(HeaderFieldId.Trains, 1);
         startHeaderFieldAnimation(HeaderFieldId.Money, train.carriageCnt + 3);
       }
-      // XOR drawing: the duplicate call erases the exclamation mark
+      // this function uses XOR when drawing, thus this duplicate call simply
+      // erases the previously drawn image
+      drawEraseTrainFinishedExclamation(Math.trunc((rect.x1 + rect.x2) / 2), Math.trunc((rect.y1 + rect.y2) / 2));
       return false;
     }
   }
@@ -382,6 +404,14 @@ function* handleCollisions(c1: Carriage, c2: Carriage): Blocking<boolean> {
   return false;
 }
 
+/* 18fa:0b10 */
+function eraseCarriagesInShadowBuffer(c: Carriage, ptr: number): void {
+  const widthBytes = ((c.rect.x2 - 1) >> 3) - (c.rect.x1 >> 3) + 1;
+  const height = c.rect.y2 - c.rect.y1;
+  if (c.next) eraseCarriagesInShadowBuffer(c.next, ptr + widthBytes * height);
+  copySpriteFromShadowBuffer(ptr, c.rect.x1, c.rect.y1 + 350, widthBytes, height);
+}
+
 /* 18fa:068a */
 export function* taskMoveAndRedrawTrains(): TaskGen {
   const minMovementPeriod = 15;
@@ -401,6 +431,7 @@ export function* taskMoveAndRedrawTrains(): TaskGen {
     for (let i = 0; i < G.trainDrawingChainLen; ++i) {
       yield G.m.yieldEffect();
 
+      let needToRedrawCursor = false;
       G.needToRedrawTrains = false;
 
       curChain = u16(curChain + 1);
@@ -431,7 +462,17 @@ export function* taskMoveAndRedrawTrains(): TaskGen {
             }
           }
         }
-        // the cursor redrawing check: drawing only
+        const mode = G.mode!;
+        const mouseX = mode.x & 0xfff8;
+        const mouseY = mode.y;
+        if (
+          mode === G.modeManagement &&
+          mouseX - 8 < carriage.rect.x2 &&
+          mouseX + 32 > carriage.rect.x1 &&
+          mouseY < carriage.rect.y2 &&
+          mouseY + 16 > carriage.rect.y1
+        )
+          needToRedrawCursor = true;
         carriage = carriage.next;
       } while (carriage);
       if (needToRestartDrawing) break;
@@ -440,9 +481,26 @@ export function* taskMoveAndRedrawTrains(): TaskGen {
       if (!G.needToRedrawTrains || !carriage) continue;
 
       drawTrainList(carriage);
-      // semaphores: drawing only
+      if (G.vga)
+        for (let k = 0; k < G.semaphoreCount; ++k)
+          if (G.semaphores[k].isRightDirection) drawSemaphore(G.semaphores[k], 350);
+
       yield* G.m.waitVerticalRetrace();
-      // copy from the shadow buffer, erase carriages: drawing only
+      if (G.vga) {
+        if (needToRedrawCursor) modeClear(G.mode!);
+        setVideoModeR0W1();
+        let bb = 0;
+        let c: Carriage | null = carriage;
+        do {
+          copyFromShadowBuffer(G.carriagesBoundingBoxes[bb++]);
+          c = c.next;
+        } while (c);
+        setVideoModeR0W2();
+        if (needToRedrawCursor) modeDraw(G.mode!);
+        setVideoModeR0W1();
+        eraseCarriagesInShadowBuffer(G.trainDrawingChains[curChain]!, VIDEO_MEM_SHADOW_BUFFER);
+        setVideoModeR0W2();
+      }
     }
   }
 }

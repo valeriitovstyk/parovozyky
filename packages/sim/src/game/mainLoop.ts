@@ -8,14 +8,15 @@ import { G } from './globals';
 import { startHeaderFieldAnimation } from './header';
 import { createNewWorld, resetTasks } from './init';
 import { playHappy2000YearMelody } from './melody';
-import { setMode, toggleMode } from './mouse';
+import { modeDraw, setMode, toggleMode } from './mouse';
+import { copyFromShadowBuffer, setPaletteItem, setVideoModeR0W1, setVideoModeR0W2 } from '../gfx/draw';
 import { randomRailDamage } from './rail';
 import { readLevel, writeRecords } from './records';
 import { entranceRail } from './res';
 import { saveGame } from './savefile';
 import { buildHouses } from './staticObject';
 import { accelerateTrains, scheduleAllTrainsRedrawing, spawnNewTrain, tryRunWaitingTrains, waitingTrainsCount } from './train';
-import { DialogType, HeaderFieldId, KEY_1, KEY_2, KEY_3, KEY_SPACE } from './types';
+import { Color, DialogType, HeaderFieldId, KEY_1, KEY_2, KEY_3, KEY_SPACE } from './types';
 import { MenuButton } from '../ui/buttons';
 import { alert, drawDialog, handleDialog } from '../ui/dialog';
 import { setHeaderValues } from '../ui/drawHeader';
@@ -69,6 +70,9 @@ function* showPauseMenu(): Blocking<PauseMenuAction> {
       case 0:
         /* 16a6:0195 */
         // [G]o
+        setVideoModeR0W1();
+        copyFromShadowBuffer(G.dialogArea);
+        setVideoModeR0W2();
         scheduleAllTrainsRedrawing();
         G.m.timer.start(); // enableTimer()
         yield* spawnNewTrain();
@@ -142,7 +146,7 @@ export function* taskGameMainLoop(): TaskGen {
         resetTasks();
 
         G.gameTime = 0;
-        // mode->drawFn(): drawing only
+        modeDraw(G.mode!);
         if (G.headers[HeaderFieldId.Year].value === 1800) {
           buildHouses(1800);
           if (G.entranceCount === 0) yield* spawnNewEntrance(entranceRail(G.entrances[0].entranceRailInfoIdx));
@@ -203,7 +207,8 @@ export function* taskGameMainLoop(): TaskGen {
           yield* G.m.waitVerticalRetrace();
 
           blinkingColor = (blinkingColor ^ 0xffffff) >>> 0;
-          G.video.blinkingColor = blinkingColor; // vga::setPaletteItem(Color::BWBlinking, ...)
+          G.video.blinkingColor = blinkingColor;
+          setPaletteItem(Color.BWBlinking, blinkingColor);
 
           isOddIter = !isOddIter;
           if (!isOddIter) {
@@ -216,7 +221,7 @@ export function* taskGameMainLoop(): TaskGen {
 
           tryRunWaitingTrains();
 
-          // if (mode == construction) mode->drawFn(): drawing only
+          if (G.mode === G.modeConstruction) modeDraw(G.mode);
 
           const newYear = incrementGameTime(100);
           if (!newYear) continue;
@@ -261,7 +266,7 @@ export function* taskGameMainLoop(): TaskGen {
               h[HeaderFieldId.Level].value = i16(h[HeaderFieldId.Level].value + 1);
               h[HeaderFieldId.Money].value = i16(h[HeaderFieldId.Money].value + 10);
               drawWorld();
-              // menuButton.draw(350): drawing only
+              MenuButton.draw(350);
               yield* animateScreenShifting();
               copyScreenBufferTo(0);
               yield* setVideoFrameOrigin(0, 0);

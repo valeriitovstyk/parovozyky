@@ -3,13 +3,21 @@ import { i16 } from '../core/ints';
 import { G } from './globals';
 import { FOOTER_Y_POS, HEADER_HEIGHT, clampRectToGameFieldBoundaries } from './drawing';
 import { pathStep } from './globals';
+import { copyFromShadowBuffer, drawGlyphW16, getPixel, putPixel, setVideoModeR0W1, setVideoModeR0W2 } from '../gfx/draw';
+import { glyphEmptyBackground, houseGlyphs, treeGlyphs } from '../gfx/res';
+import { Color } from './types';
 import { type Rail, Rectangle, type StaticObject, StaticObjectKind, setEmptyRectangle } from './types';
 
 const GAME_FIELD_WIDTH = 640;
 const GAME_FIELD_HEIGHT = 287;
 
 /* 1530:013e */
-function drawGrass(_yOffset: number): void {
+/* 1530:0203 */
+function isInsideGameField(x: number, y: number): boolean {
+  return y >= HEADER_HEIGHT && y < FOOTER_Y_POS && x >= 0 && x < 640;
+}
+
+function drawGrass(yOffset: number): void {
   // drawGrass changes the state of the random number generator (PLAN.md 2.1.2)
   const rng = G.rng;
   const seed = rng.rand();
@@ -18,12 +26,13 @@ function drawGrass(_yOffset: number): void {
     let x = rng.genRandomNumber(GAME_FIELD_WIDTH);
     let y = rng.genRandomNumber(GAME_FIELD_HEIGHT) + HEADER_HEIGHT;
     for (let j = 0; j < 45; ++j) {
-      // if (isInsideGameField(x, y)) { getPixel / putPixel } - drawing only
+      if (G.vga && isInsideGameField(x, y)) {
+        const c = getPixel(x, y + yOffset);
+        if (c === Color.Green) putPixel(x, y + yOffset, Color.Black);
+      }
       x += rng.symmetricRand(20);
       y += Math.trunc(rng.symmetricRand(20) / 4);
     }
-    void x;
-    void y;
   }
   rng.srand(seed);
 }
@@ -31,7 +40,25 @@ function drawGrass(_yOffset: number): void {
 /* 1530:0229 */
 export function drawStaticObjects(yOffset: number): void {
   drawGrass(yOffset);
-  // houses and trees: drawing only
+  if (!G.vga) return;
+  G.glyphHeight = 16;
+  for (const obj of G.staticObjects) {
+    if (obj.kind === StaticObjectKind.House) {
+      G.glyphHeight = Math.min(FOOTER_Y_POS - obj.y, 16) & 0xff;
+      drawGlyphW16(houseGlyphs[obj.type], 32, obj.x, obj.y + yOffset, obj.color);
+      drawGlyphW16(houseGlyphs[obj.type], 0, obj.x, obj.y + yOffset, Color.Black);
+    } else if (obj.kind === StaticObjectKind.Tree) {
+      G.glyphHeight = 16;
+      drawGlyphW16(treeGlyphs[obj.type], 32, obj.x, obj.y + yOffset, obj.color);
+      drawGlyphW16(treeGlyphs[obj.type], 0, obj.x, obj.y + yOffset, Color.Black);
+    }
+  }
+}
+
+/* 1530:0328 */
+export function eraseStaticObject(obj: StaticObject, yOffset: number): void {
+  G.glyphHeight = 16;
+  drawGlyphW16(glyphEmptyBackground, 0, obj.x, obj.y + yOffset, Color.Green);
 }
 
 /* 17bf:0b96 */
@@ -76,7 +103,7 @@ export function destroyStaticObjectsForRailConstruction(r: Rail): void {
       case StaticObjectKind.Tree:
         cut[obj.kind] = (cut[obj.kind] + 1) & 0xff;
         obj.kind = StaticObjectKind.None;
-        // eraseStaticObject(obj, 350): drawing only
+        eraseStaticObject(obj, 350);
         if (obj.x < a.x1) a.x1 = obj.x;
         if (obj.x + 16 > a.x2) a.x2 = i16(obj.x + 16);
         if (obj.y < a.y1) a.y1 = obj.y;
@@ -105,8 +132,10 @@ export function buildHouses(year: number): void {
   }
   if (created) {
     drawStaticObjects(350);
+    setVideoModeR0W1();
     clampRectToGameFieldBoundaries(boundingBox);
-    // copyFromShadowBuffer: drawing only
+    copyFromShadowBuffer(boundingBox);
+    setVideoModeR0W2();
   }
 }
 

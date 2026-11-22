@@ -5,7 +5,7 @@ import { clampRectToGameFieldBoundaries, drawFieldBackground, eraseImpasse, redr
 import { G } from './globals';
 import { playScheduledTrainMelody, playSpawnedEntranceMelody } from './melody';
 import { connectRail } from './rail';
-import { updateSemaphores } from './semaphore';
+import { eraseSemaphore, updateSemaphores } from './semaphore';
 import { destroyStaticObjectsForRailConstruction } from './staticObject';
 import { CarriageType, type Entrance, type RailInfo } from './types';
 import { drawDispatcher } from '../ui/drawHeader';
@@ -22,7 +22,7 @@ export function* spawnNewEntrance(riIn: RailInfo): Blocking {
   G.railRoad[G.railRoadCount].copyFrom(ri);
   G.railRoadCount = (G.railRoadCount + 1) & 0xffff;
   updateSemaphores(ri);
-  // eraseSemaphore(g_erasedSemaphores[i], 350) - drawing only
+  for (let i = 0; i < G.erasedSemaphoreCount; ++i) eraseSemaphore(G.erasedSemaphores[i], 350);
   drawFieldBackground(350);
   yield* redrawScreenArea();
   yield* playSpawnedEntranceMelody();

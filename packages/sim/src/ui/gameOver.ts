@@ -4,10 +4,12 @@ import { G } from '../game/globals';
 import { playGameOverMelody } from '../game/melody';
 import { writeRecords } from '../game/records';
 import { returnToMainMenu } from './mainMenu';
+import { imageDot7 } from '../gfx/draw';
 
 /* 16a6:0615 */
 export function* gameOver(): Blocking {
-  // imageDot7("GAMEOVER.7"): drawing only
+  // (reSL uses the upper-case name, DOS was case-insensitive)
+  imageDot7(184, 58, 284, 263, G.vga ? G.files.read('GAMEOVER.7') : null);
   G.emit({ type: 'screen', name: 'gameover' });
   yield* playGameOverMelody();
   if (!G.isDemoMode) writeRecords();

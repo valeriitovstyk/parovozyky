@@ -1,7 +1,8 @@
 // ui/manual.cpp
 import type { Blocking } from '../core/scheduler';
 import { G } from '../game/globals';
-import { KEY_ESCAPE, ME_LEFTRELEASED } from '../game/types';
+import { Color, KEY_ESCAPE, ME_LEFTRELEASED } from '../game/types';
+import { dialogFrame, drawTextSmall } from '../gfx/draw';
 import { CloseButton } from './buttons';
 import { animateScreenShifting, copyScreenBufferTo, setVideoFrameOrigin } from './screens';
 
@@ -47,6 +48,12 @@ export function* showManual(): Blocking {
     do {
       G.video.screen = 'manual';
       G.video.manualPage = curPage;
+      if (G.vga) {
+        dialogFrame(0, 350, 80, 350, Color.Gray);
+        const page = pages[curPage];
+        for (let i = 0; i < 25; ++i) drawTextSmall(48, i * 13 + 360, page[i], Color.Black);
+        CloseButton.draw(350);
+      }
       yield* animateScreenShifting();
       copyScreenBufferTo(0);
       yield* setVideoFrameOrigin(0, 0);

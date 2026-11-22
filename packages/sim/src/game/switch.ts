@@ -1,8 +1,10 @@
 // game/switch.cpp
-import { i16 } from '../core/ints';
+import { i16, u16 } from '../core/ints';
+import { VIDEO_MEM_ROW_BYTES, VIDEO_MEM_SHADOW_BUFFER, VIDEO_MEM_START_ADDR, drawGlyphAlignX8, setVideoModeR0W1, setVideoModeR0W2 } from '../gfx/draw';
+import { railGlyph } from '../gfx/res';
 import { G } from './globals';
 import { railConnectionBias, semaphoreGlyphBias } from './res';
-import { DISABLED_SWITCH_PATH, type RailConnection, type Switch } from './types';
+import { Color, DISABLED_SWITCH_PATH, type RailConnection, type Switch } from './types';
 
 /* 19de:02ee */
 export function updateSwitchPosition(s: Switch): void {
@@ -70,4 +72,67 @@ export function switchIsBusy(s: Switch): boolean {
     }
   }
   return false;
+}
+
+// ---- drawing (switch.cpp 13d1:*) ----
+
+function switchGlyph(idx: number) {
+  const s = G.switches[idx];
+  const rail = s.entry.rail!;
+  return { rail, rg: railGlyph(rail.type, 3 + s.entry.slot) };
+}
+
+/* 13d1:010f — draws a switch, backing up the image area for eraseSwitch */
+export function drawSwitch(idx: number, drawToScreen: boolean): void {
+  const v = G.vga;
+  if (!v) return;
+  let dstPtr = VIDEO_MEM_START_ADDR + u16(-(idx + 1) * 30 - 1);
+  const { rail, rg } = switchGlyph(idx);
+  setVideoModeR0W1();
+  let p = rg.glyph.o;
+  for (let y = 0; y < rg.glyph.h; ++y) {
+    const yPos = rail.y + rg.dy + y;
+    for (let xBytes = 0; xBytes < rg.glyph.w; ++xBytes) {
+      if (rg.glyph.d[p]) {
+        const xPos = rail.x + rg.dx + xBytes * 8;
+        const srcPtr = VIDEO_MEM_START_ADDR + (yPos + 350) * VIDEO_MEM_ROW_BYTES + (xPos >> 3);
+        v.write(dstPtr++, v.read(srcPtr));
+      }
+      ++p;
+    }
+  }
+  setVideoModeR0W2();
+  if (drawToScreen) drawGlyphAlignX8(rg.glyph, rail.x + rg.dx, rail.y + rg.dy, Color.Black);
+  drawGlyphAlignX8(rg.glyph, rail.x + rg.dx, rail.y + rg.dy + 350, Color.Black);
+}
+
+/* 13d1:0001 */
+export function eraseSwitch(idx: number): void {
+  const v = G.vga;
+  if (!v) return;
+  let srcPtr = VIDEO_MEM_START_ADDR + u16(-(idx + 1) * 30 - 1);
+  const { rail, rg } = switchGlyph(idx);
+  setVideoModeR0W1();
+  let p = rg.glyph.o;
+  for (let y = 0; y < rg.glyph.h; ++y) {
+    const yPos = rail.y + rg.dy + y;
+    for (let xBytes = 0; xBytes < rg.glyph.w; ++xBytes) {
+      if (rg.glyph.d[p]) {
+        const xPos = rail.x + rg.dx + xBytes * 8;
+        const offset = i16(yPos * VIDEO_MEM_ROW_BYTES + (xPos >> 3));
+        const data = v.read(srcPtr++);
+        v.write(VIDEO_MEM_START_ADDR + offset, data);
+        v.write(VIDEO_MEM_SHADOW_BUFFER + offset, data);
+      }
+      ++p;
+    }
+  }
+  setVideoModeR0W2();
+}
+
+/* 13d1:026c — just draws a switch (no backup) */
+export function drawSwitchNoBackup(idx: number, yOffset: number): void {
+  if (!G.vga) return;
+  const { rail, rg } = switchGlyph(idx);
+  drawGlyphAlignX8(rg.glyph, rail.x + rg.dx, rail.y + rg.dy + yOffset, Color.Black);
 }

@@ -9,6 +9,7 @@ import { taskGameMainLoop } from './game/mainLoop';
 import { handleMouseInput, taskMouseEventHandling } from './game/mouse';
 import { taskSpawnTrains } from './game/train';
 import { TraceRecorder, type TraceOptions } from './trace';
+import { Vga } from './gfx/vga';
 
 export interface SimOptions {
   seed: number;
@@ -27,6 +28,10 @@ export interface SimOptions {
    * train that would walk into a dead end (the playable game).
    */
   ubPolicy?: 'halt' | 'recover';
+  /** emulate the VGA video memory (classic renderer, screenshot tests) */
+  video?: boolean;
+  /** called at every frame boundary (VGAEmulation::flush with a new frame) */
+  onFrame?: (t: number) => void;
   /** sound(freq) / nosound() with the virtual time */
   onSound?: (freq: number, t: number) => void;
 }
@@ -38,6 +43,8 @@ export interface Sim {
   readonly halted: SimHalt | null;
   pushInput(ev: InputEvent): void;
   advanceTo(us: number): void;
+  /** the visible 640x350 screen as ARGB (needs `video: true`) */
+  renderScreen(dst: Uint32Array): boolean;
   readonly trace: TraceRecorder | null;
 }
 
@@ -68,6 +75,7 @@ export function createSim(opts: SimOptions): Sim {
     opts.onSound?.(freq, t);
   };
   if (opts.stopAtUs !== undefined) m.stopAt = opts.stopAtUs;
+  if (opts.onFrame) observer.onFrame = opts.onFrame;
 
   const rng = new Rng();
   world = Object.assign(new World(m, rng, opts.files), {
@@ -81,6 +89,7 @@ export function createSim(opts: SimOptions): Sim {
   }) as GlobalsHolder;
   if (opts.onEvent) world.view = { event: opts.onEvent };
   world.ubPolicy = opts.ubPolicy ?? 'halt';
+  if (opts.video) world.vga = new Vga();
   setGlobals(world);
 
   // main(): the SDL helper task is added first
@@ -113,6 +122,11 @@ export function createSim(opts: SimOptions): Sim {
       return m.halted;
     },
     pushInput: (ev) => m.pushInput(ev),
+    renderScreen(dst: Uint32Array): boolean {
+      if (!w.vga) return false;
+      w.vga.renderScreen(dst, w.video.frameOriginY, w.video.lineCompare);
+      return true;
+    },
     advanceTo(us: number) {
       setGlobals(w);
       m.advanceTo(us);

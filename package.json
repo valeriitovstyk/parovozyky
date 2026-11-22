@@ -18,6 +18,7 @@
     "oracle:golden": "node tools/oracle/golden.mjs",
     "extract": "bash tools/extract/extract.sh",
     "test:golden": "vitest run --project golden",
+    "test:screens": "vitest run --project oracle",
     "e2e": "playwright test"
   },
   "devDependencies": {

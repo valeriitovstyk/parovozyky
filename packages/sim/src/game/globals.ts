@@ -6,6 +6,7 @@ import type { Machine } from '../core/machine';
 import type { Rng } from '../core/rng';
 import { MessageQueue, type Task } from '../core/scheduler';
 import type { FileStore } from '../files';
+import type { Vga } from '../gfx/vga';
 import type { RecordView } from './records';
 import { entranceColors, movementPaths } from '../data/tables';
 import {
@@ -60,6 +61,10 @@ export class World {
   readonly rng: Rng;
   readonly files: FileStore;
   view: View | null = null;
+  /** emulated VGA memory (null: the video is disabled, drawing is skipped) */
+  vga: Vga | null = null;
+  /** g_glyphHeight (1d7d:267a) */
+  glyphHeight = 0x10;
   /** what to do on undefined behaviour of the original game (docs/fidelity.md U1) */
   ubPolicy: 'halt' | 'recover' = 'halt';
   /** set while spawnTrain / spawnServer place a new train */
@@ -104,6 +109,8 @@ export class World {
   trainDrawingChainLen = 0; // u16
   readonly trainDrawingChains: (Carriage | null)[] = new Array(20).fill(null);
   needToRedrawTrains = false;
+  /** g_dialogArea (dialog.cpp) */
+  readonly dialogArea = new Rectangle();
   /** g_areaToRedraw (drawing.cpp): drawing only, kept because code computes it */
   readonly areaToRedraw = new Rectangle();
   /** g_carriagesBoundingBoxes: written by drawTrainList, used for redrawing only */

@@ -1,16 +1,34 @@
 // game/road_construction.cpp
 import { pop, type TaskGen } from '../core/scheduler';
-import { clampRectToGameFieldBoundaries, drawFieldBackground, eraseImpasse, redrawScreenArea, scheduleRailRedrawing } from './drawing';
+import { clampRectToGameFieldBoundaries, drawFieldBackground, drawRail, drawRailBg1, drawRailBg2, eraseImpasse, redrawScreenArea, scheduleRailRedrawing } from './drawing';
+import { modeClear, modeDraw } from './mouse';
+import { railConnectionBias, railTypeMeta } from './res';
 import { G } from './globals';
 import { spendMoney } from './header';
 import { beepSound, playErrorMelody } from './melody';
 import { checkRailWouldConflict, connectRail } from './rail';
-import { updateSemaphores } from './semaphore';
+import { eraseSemaphore, updateSemaphores } from './semaphore';
 import { destroyStaticObjectsForRailConstruction, drawStaticObjects } from './staticObject';
-import { HeaderFieldId, StaticObjectKind } from './types';
+import { Color, HeaderFieldId, type RailInfo, StaticObjectKind } from './types';
 import { showStatusMessage } from '../ui/statusBar';
 
-// redrawAdjacentRails (17bf:0aa0): drawing only
+/* 17bf:0aa0 — the gray background of a new rail may erase adjacent rails */
+function redrawAdjacentRails(ri: RailInfo): void {
+  if (!G.vga) return;
+  for (let side = 0; side < 2; ++side) {
+    const b = railConnectionBias(ri.railType, side);
+    const x = b.tileOffsetX + ri.tileX;
+    const y = b.tileOffsetY + ri.tileY;
+    for (const rt of railTypeMeta) {
+      const tileX = x + rt.tileOffsetX;
+      const tileY = y + rt.tileOffsetX; // (sic) tileOffsetX, as in reSL
+      // (drawing only: an out-of-range read here must not stop the game)
+      const idx = tileX * 11 + tileY;
+      const m = idx >= 0 && idx < 121 ? G.railroadTypeMasks[idx] : 0;
+      if ((1 << rt.railType) & m) drawRail(tileX, tileY, rt.railType, Color.Black, 350);
+    }
+  }
+}
 
 /* 17bf:000d */
 export function* taskRoadConstruction(): TaskGen {
@@ -31,7 +49,9 @@ export function* taskRoadConstruction(): TaskGen {
     if (penalty > G.headers[HeaderFieldId.Money].value) {
       showStatusMessage('Not enough money to build');
       yield* playErrorMelody();
-      // mode clear/draw, drawRail(Green): drawing only
+      modeClear(G.mode!);
+      drawRail(ri.tileX, ri.tileY, ri.railType, Color.Green, 350);
+      modeDraw(G.mode!);
       G.emit({ type: 'railStage', tileX: ri.tileX, tileY: ri.tileY, railType: ri.railType, stage: -1 });
       scheduleRailRedrawing(rail);
       clampRectToGameFieldBoundaries(G.areaToRedraw);
@@ -65,12 +85,17 @@ export function* taskRoadConstruction(): TaskGen {
     yield G.m.sleep(100);
     yield* beepSound(2);
     eraseImpasse(rail, 350);
+    drawRail(ri.tileX, ri.tileY, ri.railType, Color.Gray, 350);
+    drawRailBg1(ri.tileX, ri.tileY, ri.railType, Color.DarkGray, 350);
     G.emit({ type: 'railStage', tileX: ri.tileX, tileY: ri.tileY, railType: ri.railType, stage: 1 });
     scheduleRailRedrawing(rail);
     clampRectToGameFieldBoundaries(G.areaToRedraw);
     yield* redrawScreenArea();
     yield G.m.sleep(100);
     yield* beepSound(3);
+    drawRailBg2(ri.tileX, ri.tileY, ri.railType, Color.Gray, 350);
+    drawRail(ri.tileX, ri.tileY, ri.railType, Color.Gray, 350);
+    redrawAdjacentRails(ri);
     G.emit({ type: 'railStage', tileX: ri.tileX, tileY: ri.tileY, railType: ri.railType, stage: 2 });
     yield* redrawScreenArea();
     yield G.m.sleep(100);
@@ -79,7 +104,7 @@ export function* taskRoadConstruction(): TaskGen {
     G.railRoad[G.railRoadCount].copyFrom(ri);
     G.railRoadCount = (G.railRoadCount + 1) & 0xffff;
     updateSemaphores(ri);
-    // eraseSemaphore: drawing only
+    for (let i = 0; i < G.erasedSemaphoreCount; ++i) eraseSemaphore(G.erasedSemaphores[i], 350);
     G.emit({ type: 'railStage', tileX: ri.tileX, tileY: ri.tileY, railType: ri.railType, stage: 3 });
     drawFieldBackground(0x15e);
     yield* redrawScreenArea();

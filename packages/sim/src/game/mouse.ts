@@ -1,5 +1,5 @@
 // game/mouse/{mouse,state,construction_mode,management_mode}.cpp
-import { i16, i8, u8 } from '../core/ints';
+import { i16, i8, u16, u8 } from '../core/ints';
 import { pop, type Blocking, type TaskGen } from '../core/scheduler';
 import type { MouseEvent } from '../core/machine';
 import { findClosestEntrance, entranceIsFree } from './entrance';
@@ -8,10 +8,14 @@ import { spendMoney } from './header';
 import { beepSound, playEntitySwitchedSound, playErrorMelody, playSingleClickSound, playSwitchSwitchedMelody } from './melody';
 import { checkRailWouldConflict, checkRailWouldConflictWithExistingRoad } from './rail';
 import { allowedRailCursorTypes } from './res';
-import { findClosestSemaphore, toggleSemaphore } from './semaphore';
-import { findClosestSwitch, switchIsBusy, toggleSwitch } from './switch';
+import { drawSemaphore, findClosestSemaphore, toggleSemaphore } from './semaphore';
+import { drawSwitch, eraseSwitch, findClosestSwitch, switchIsBusy, toggleSwitch } from './switch';
+import { drawRail } from './drawing';
+import { type Glyph, VIDEO_MEM_ROW_BYTES, VIDEO_MEM_SHADOW_BUFFER, VIDEO_MEM_START_ADDR, drawGlyphAlignX8, setVideoModeR0W1, setVideoModeR0W2 } from '../gfx/draw';
+import { railGlyph } from '../gfx/res';
 import { scheduleAllTrainsRedrawing, spawnServer } from './train';
 import {
+  Color,
   HeaderFieldId,
   MB_LEFT,
   MB_RIGHT,
@@ -26,6 +30,52 @@ import { showStatusMessage } from '../ui/statusBar';
 
 // ---- construction mode (construction_mode.cpp) ----
 
+/** mouse::g_state.glyph / videoMemOffset (drawing state of the rail cursor) */
+const cursorState: { glyph: Glyph | null; videoMemOffset: number } = { glyph: null, videoMemOffset: 0 };
+
+/* 14af:0126 */
+function drawCursorRail(): void {
+  if (!G.vga) return;
+  const rcs = G.railCursorState;
+  const rg = railGlyph(rcs.railType, 0);
+  const x = (rcs.tileX - rcs.tileY) * 88 + rg.dx + 320;
+  const y = (rcs.tileX + rcs.tileY) * 21 + rg.dy - 22;
+  cursorState.videoMemOffset = u16(y * VIDEO_MEM_ROW_BYTES + Math.trunc(x / 8));
+  cursorState.glyph = rg.glyph;
+  drawGlyphAlignX8(rg.glyph, x, y, Color.BWBlinking);
+}
+
+function eraseCursorRail(): void {
+  const v = G.vga;
+  if (!v) return;
+  const glyph = cursorState.glyph;
+  if (!glyph) throw new Error('eraseCursorRail: no glyph');
+  let dstPtr = VIDEO_MEM_START_ADDR + cursorState.videoMemOffset;
+  let srcPtr = VIDEO_MEM_SHADOW_BUFFER + cursorState.videoMemOffset;
+  setVideoModeR0W1();
+  let p = glyph.o;
+  for (let y = 0; y < glyph.h; ++y) {
+    for (let x = 0; x < glyph.w; ++x) {
+      if (glyph.d[p++]) v.write(dstPtr, v.read(srcPtr));
+      ++srcPtr;
+      ++dstPtr;
+    }
+    srcPtr += VIDEO_MEM_ROW_BYTES - glyph.w;
+    dstPtr += VIDEO_MEM_ROW_BYTES - glyph.w;
+  }
+  setVideoModeR0W2();
+}
+
+/** mode->drawFn() (the arrow cursor of the management mode is drawn by the driver) */
+export function modeDraw(mode: Mode): void {
+  if (mode === G.modeConstruction) drawCursorRail();
+}
+
+/** mode->clearFn() */
+export function modeClear(mode: Mode): void {
+  if (mode === G.modeConstruction) eraseCursorRail();
+}
+
 /* 14af:0264 */
 function updateCursorPosConstruction(x: number, y: number): boolean {
   const rcs = G.railCursorState;
@@ -38,9 +88,10 @@ function updateCursorPosConstruction(x: number, y: number): boolean {
   if (tileX === rcs.tileX && tileY === rcs.tileY) return false;
   if (tileX < 0 || tileX > 10 || tileY < 0 || tileY > 10) return false;
   if (allowedRailCursorTypes(tileX, tileY) & (1 << rcs.railType)) {
-    // mode.clearFn() / drawFn(): drawing only
+    modeClear(G.mode!);
     rcs.tileX = u8(tileX);
     rcs.tileY = u8(tileY);
+    modeDraw(G.mode!);
     return true;
   }
   return false;
@@ -63,10 +114,10 @@ function updatePosFn(mode: Mode, x: number, y: number): boolean {
 
 /* 14af:0104 */
 export function setMode(newMode: Mode): void {
-  // if (g_state.mode) g_state.mode->clearFn(): drawing only
+  if (G.mode) modeClear(G.mode);
   G.mode = newMode;
   G.gridVisible = G.mode === G.modeConstruction;
-  // newMode.drawFn(): drawing only
+  modeDraw(newMode);
 }
 
 export function toggleMode(): void {
@@ -124,6 +175,7 @@ export function* taskMouseEventHandling(): TaskGen {
         /* 14af:0595 */
         // if the user clicked on a new chunk, we just need to move cursor
         if (!positionChanged) {
+          modeClear(G.mode!);
           const rcs = G.railCursorState;
           for (;;) {
             rcs.railType = u8((rcs.railType + 1) % 6);
@@ -131,6 +183,7 @@ export function* taskMouseEventHandling(): TaskGen {
             const allowedMask = allowedRailCursorTypes(rcs.tileX, rcs.tileY);
             if (curRailMask & allowedMask) break;
           }
+          modeDraw(G.mode!);
         }
         break;
       case MouseAction.BuildRails:
@@ -184,8 +237,10 @@ function* mouseClick(mode: Mode): Blocking {
       showStatusMessage('Switch is locked by train');
       yield* playErrorMelody();
     } else {
-      // eraseSwitch / drawSwitch: drawing only
+      const switchIdx = G.switches.indexOf(sw);
+      eraseSwitch(switchIdx);
       toggleSwitch(sw);
+      drawSwitch(switchIdx, true);
       scheduleAllTrainsRedrawing();
       yield* playSwitchSwitchedMelody();
     }
@@ -194,7 +249,8 @@ function* mouseClick(mode: Mode): Blocking {
   const sem = findClosestSemaphore(mode.x, mode.y);
   if (sem) {
     toggleSemaphore(sem);
-    // drawSemaphore x2: drawing only
+    drawSemaphore(sem, 0);
+    drawSemaphore(sem, 350);
     scheduleAllTrainsRedrawing();
     yield* playEntitySwitchedSound(sem.isRed);
   } else yield* playErrorMelody();
@@ -220,7 +276,9 @@ function* buildRails(): Blocking {
       yield* beepSound(0);
       rcs.year_8 = u8(G.headers[HeaderFieldId.Year].value - 8);
       G.railConstructionMsgQueue.push(rcs.clone());
-      // mode clear, drawRail(White), mode draw: drawing only
+      modeClear(G.mode!);
+      drawRail(rcs.tileX, rcs.tileY, rcs.railType, Color.White, 350);
+      modeDraw(G.mode!);
       G.emit({ type: 'railStage', tileX: rcs.tileX, tileY: rcs.tileY, railType: rcs.railType, stage: 0 });
     }
   }

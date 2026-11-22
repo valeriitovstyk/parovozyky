@@ -5,8 +5,9 @@ import type { Blocking } from '../core/scheduler';
 import { G } from '../game/globals';
 import { playEntitySwitchedSound, playErrorMelody, waitForNRetraces } from '../game/melody';
 import { charTraits } from '../game/res';
-import { DialogType, ME_LEFTRELEASED } from '../game/types';
-import { buttonHeight, toggleButtonState } from './buttons';
+import { Color, DialogType, ME_LEFTRELEASED } from '../game/types';
+import { dialogFrame, drawText } from '../gfx/draw';
+import { buttonHeight, drawButton, toggleButtonState } from './buttons';
 
 /* 1d7d:1f62 : 74 bytes */
 const g_asciiToKeycodeTable = [
@@ -44,11 +45,23 @@ export function drawDialog(type: DialogType, yOffset: number): void {
   const x = (80 - widthBytes) * 4;
   const y0 = yOffset + Math.trunc((GAME_FIELD_HEIGHT - height) / 2);
   const y = y0 + 47;
+  const bgColor = itemsCount ? Color.Gray : Color.Red;
+  dialogFrame(x, y, widthBytes, height, bgColor);
+  drawText(x + 25, y0 + 65, dlg.title, Color.Black);
   for (let i = 0; i < itemsCount; ++i) {
     dlg.x = i16(x + 25);
     const itemBaseLineY = y + (i + 1) * 30;
     dlg.itemY[i] = i16(itemBaseLineY + 18);
+    const name = dlg.itemNames[i]!;
+    drawButton(dlg.x, dlg.itemY[i], name.slice(0, 1));
+    drawText(dlg.x + 28, itemBaseLineY + 23, name.slice(1), Color.Black);
   }
+  // g_dialogArea (pause menu: the area restored after the dialog)
+  const area = G.dialogArea;
+  area.x1 = x;
+  area.x2 = x + widthBytes * 8;
+  area.y1 = y > 350 ? y - 350 : y;
+  area.y2 = area.y1 + height + 1;
   G.emit({ type: 'dialog', dialog: type, yOffset });
 }
 

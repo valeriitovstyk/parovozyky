@@ -1,6 +1,7 @@
 // graphics/animation.cpp and the blocking screen helpers (logic part).
 import type { Blocking } from '../core/scheduler';
 import { G } from '../game/globals';
+import { copyScreenBufferToImpl } from '../gfx/draw';
 
 /* 1b06:04fd */
 export function* shiftScreen(yOffset: number): Blocking {
@@ -27,7 +28,8 @@ export function* waitForLine(_line: number): Blocking {
   yield* G.m.waitVerticalRetrace();
 }
 
-/** graphics::copyScreenBufferTo(0): drawing only (the screen picture changes) */
-export function copyScreenBufferTo(_y: number): void {
+/* 132d:03c2 */
+export function copyScreenBufferTo(y: number): void {
   G.video.copies++;
+  copyScreenBufferToImpl(y);
 }

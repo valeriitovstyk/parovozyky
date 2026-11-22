@@ -6,7 +6,7 @@ import { connectRail, isVisible, railIndex } from './rail';
 import { resetGameData } from './init';
 import { updateSemaphores } from './semaphore';
 import { toggleSwitch } from './switch';
-import { showStatusMessage } from '../ui/statusBar';
+import { drawStatusBarWithCopyright, showStatusMessage } from '../ui/statusBar';
 import {
   type Color,
   DISABLED_SWITCH_PATH,
@@ -517,7 +517,7 @@ export function saveGame(): boolean {
   G.files.write(fileName, serializeGame());
   G.emit({ type: 'save', fileName });
   showStatusMessage('SAVING ... DONE ');
-  // drawStatusBarWithCopyright(0): drawing only
+  drawStatusBarWithCopyright(0);
   return true;
 }
 
