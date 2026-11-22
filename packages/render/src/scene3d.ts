@@ -89,6 +89,12 @@ export class ModernRenderer {
   private readonly fxGroup = new THREE.Group();
   private readonly gridLines: THREE.LineSegments;
   private readonly cursorGroup = new THREE.Group();
+  /** logical pointer position: the switch/semaphore/entrance a click would act on is highlighted */
+  pointer: { x: number; y: number } | null = null;
+  private readonly highlight = new THREE.Mesh(
+    new THREE.RingGeometry(7, 9.5, 24).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xfff066, transparent: true, opacity: 0.9, depthTest: false }),
+  );
 
   private railSig = '';
   private objectSig = -1;
@@ -148,6 +154,8 @@ export class ModernRenderer {
     this.scene.add(ground);
 
     this.gridLines = this.buildGrid();
+    this.highlight.renderOrder = 10;
+    this.scene.add(this.highlight);
     this.scene.add(this.gridLines, this.railGroup, this.objectGroup, this.signalGroup, this.trainGroup, this.fxGroup, this.cursorGroup);
   }
 
@@ -187,6 +195,7 @@ export class ModernRenderer {
     this.updateTrains(w, sim.now, nowMs);
     this.updateFx(nowMs);
     this.gridLines.visible = w.gridVisible;
+    this.updateHighlight(w);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -462,6 +471,43 @@ export class ModernRenderer {
       this.carriageMeshes.delete(id);
       this.interp.forget(id);
     }
+  }
+
+  // ---- click target ------------------------------------------------------------
+
+  /** the same rules as the game (findClosestSwitch / findClosestSemaphore / findClosestEntrance) */
+  private updateHighlight(w: World): void {
+    this.highlight.visible = false;
+    const p = this.pointer;
+    if (!p || w.mode !== w.modeManagement || w.video.screen !== 'game' || w.video.dialog >= 0) return;
+    // mode.x/y are clamped to [0, 628] x [0, 318] by the management mode
+    const x = Math.min(Math.max(Math.floor(p.x), 0), 628);
+    const y = Math.min(Math.max(Math.floor(p.y), 0), 318);
+    let best = 60;
+    let target: { x: number; y: number; h: number } | null = null;
+    for (let i = w.nSwitches - 1; i >= 0; --i) {
+      const s = w.switches[i];
+      const d = Math.abs(x - s.x) + Math.abs(y - s.y) * 4;
+      if (d < best) {
+        best = d;
+        target = { x: s.x, y: s.y, h: 1 };
+      }
+    }
+    if (!target) {
+      best = 60;
+      for (let i = w.semaphoreCount - 1; i >= 0; --i) {
+        const s = w.semaphores[i];
+        const d = Math.abs(x - s.pixelX) + Math.abs(y - s.pixelY + 10) * 4;
+        if (d < best) {
+          best = d;
+          target = { x: s.pixelX, y: s.pixelY, h: 1 };
+        }
+      }
+    }
+    if (!target) return;
+    const wp = worldFromLogical(target.x, target.y);
+    this.highlight.position.set(wp.x, target.h, wp.z);
+    this.highlight.visible = true;
   }
 
   // ---- effects -----------------------------------------------------------------

@@ -12,3 +12,5 @@ export * as tables from './data/tables';
 export * as glyphTables from './data/glyphs';
 export { Color, CarriageType, StaticObjectKind, INNER_ENTRANCE_RAIL_TYPE } from './game/types';
 export type { World } from './game/globals';
+export { manualPages } from './ui/manual';
+export { DialogType } from './game/types';

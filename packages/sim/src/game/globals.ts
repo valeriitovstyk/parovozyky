@@ -187,6 +187,8 @@ export class World {
     records: null as null | { byTrains: RecordView[]; byYears: RecordView[] },
     /** the dialog being handled (handleDialog) or -1 */
     dialog: -1,
+    /** the status bar message ('' = the copyright line) */
+    statusText: '',
   };
 
   // ---- savefile ----

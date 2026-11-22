@@ -36,12 +36,41 @@ export function attachInput(canvas: HTMLElement, sink: InputSink, toLogical: ToL
     const y = Math.floor(l.y);
     return [Math.max(0, Math.min(639, x)), Math.max(0, Math.min(349, y))] as const;
   };
+  // touch (reSL touch_handler.cpp): tap = left click, long tap = right click,
+  // swipe = both buttons (switches the mouse mode)
+  let touch: { x0: number; y0: number; t0: number; timer: number; done: boolean; pos: readonly [number, number] } | null = null;
+  const LONG_TAP_MS = 700;
+  const SWIPE_PX = 40;
   const onMove = (e: PointerEvent) => {
     const [x, y] = pos(e);
+    if (e.pointerType === 'touch') {
+      if (!touch || touch.done) return;
+      touch.pos = [x, y];
+      if (Math.hypot(e.clientX - touch.x0, e.clientY - touch.y0) > SWIPE_PX) {
+        touch.done = true;
+        clearTimeout(touch.timer);
+        sink.mouse(ME_LEFTPRESSED | ME_RIGHTPRESSED, 3, x, y);
+        sink.mouse(ME_LEFTRELEASED | ME_RIGHTRELEASED, 0, x, y);
+      }
+      return;
+    }
     sink.mouse(0, buttons, x, y);
   };
   const onDown = (e: PointerEvent) => {
     sink.gesture();
+    if (e.pointerType === 'touch') {
+      e.preventDefault();
+      const p = pos(e);
+      sink.mouse(0, 0, p[0], p[1]); // the cursor follows the finger
+      const t = { x0: e.clientX, y0: e.clientY, t0: e.timeStamp, done: false, pos: p, timer: 0 };
+      t.timer = window.setTimeout(() => {
+        if (t.done) return;
+        t.done = true;
+        sink.mouse(ME_RIGHTRELEASED, 0, t.pos[0], t.pos[1]);
+      }, LONG_TAP_MS);
+      touch = t;
+      return;
+    }
     e.preventDefault();
     if ('setPointerCapture' in canvas) canvas.setPointerCapture(e.pointerId);
     const [x, y] = pos(e);
@@ -55,6 +84,15 @@ export function attachInput(canvas: HTMLElement, sink: InputSink, toLogical: ToL
   };
   const onUp = (e: PointerEvent) => {
     const [x, y] = pos(e);
+    if (e.pointerType === 'touch') {
+      if (touch && !touch.done) {
+        touch.done = true;
+        clearTimeout(touch.timer);
+        sink.mouse(ME_LEFTRELEASED, 0, x, y);
+      }
+      touch = null;
+      return;
+    }
     if (e.button === 0 && buttons & 1) {
       buttons &= ~1;
       sink.mouse(ME_LEFTRELEASED, buttons, x, y);

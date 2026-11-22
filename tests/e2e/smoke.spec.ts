@@ -46,6 +46,7 @@ const canvas = (page: Page) => page.locator('#screen');
 
 async function skipLoadingScreen(page: Page) {
   await until(page, (p) => p.screen === 'loading');
+  await page.waitForTimeout(300);
   await page.locator('#app').click({ position: { x: 400, y: 300 } });
   await until(page, (p) => p.screen === 'menu');
   await page.waitForTimeout(1500); // the menu slides in

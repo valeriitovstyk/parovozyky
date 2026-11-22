@@ -20,7 +20,8 @@
     "test:golden": "vitest run --project golden",
     "test:screens": "vitest run --project oracle",
     "e2e": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project smoke",
-    "perf": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project perf --reporter=list"
+    "perf": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project perf --reporter=list",
+    "screens": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project screens --workers=1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
