@@ -21,6 +21,7 @@ const PALETTE = [
   '#aa0000', '#ff5555', '#aa5500', '#553300', '#7a4a20',
   '#ffff55', '#ddaa00', '#f0e0b0', '#d8c8a0', '#b8a478', '#fff8e0',
   '#5fa890', '#3f7868', '#e0b060', '#a8d8a0', '#f0a8a0', '#a8c8f0', '#aa3300',
+  '#8fb8a0', '#6f9884',
 ];
 
 type P = [number, number];
@@ -195,10 +196,56 @@ function sky(p: Painter): void {
   cloud(588, 30, 0.6);
 }
 
+/** the High Castle hill: the mound with the flag and the TV tower */
+function highCastle(p: Painter): void {
+  const g = p.g;
+  g.beginPath();
+  g.moveTo(188, 262);
+  g.bezierCurveTo(214, 200, 240, 152, 274, 148);
+  g.bezierCurveTo(306, 145, 334, 178, 362, 262);
+  g.closePath();
+  g.fillStyle = '#8fb8a0';
+  g.fill();
+  // trees on the slopes
+  for (let i = 0; i < 26; ++i) {
+    const x = 200 + ((i * 37) % 150);
+    const top = x < 274 ? 262 - ((x - 188) / 86) * 112 : 148 + ((x - 274) / 88) * 112;
+    const y = top + 8 + ((i * 53) % 40);
+    if (y < 258) p.circle(x, y, 3 + (i % 3), '#6f9884', null);
+  }
+  // ruins of the castle wall
+  p.rect(250, 152, 12, 6, '#9fbfd0', null);
+  p.rect(252, 148, 3, 4, '#9fbfd0', null);
+  p.rect(258, 149, 3, 3, '#9fbfd0', null);
+  // the mound with a flag
+  p.poly([[264, 150], [272, 138], [280, 150]], '#6f9884', null);
+  p.line([272, 138], [272, 120], '#000', 0.5);
+  p.rect(272, 120, 11, 4, '#5555ff', null);
+  p.rect(272, 124, 11, 4, '#ffff55', null);
+  // the TV tower: a tapering red and white lattice
+  const base = 156;
+  const top = 92;
+  const x0 = 312;
+  const w = (y: number) => 2.5 + ((y - top) / (base - top)) * 4.5;
+  const n = 8;
+  for (let i = 0; i < n; ++i) {
+    const y0 = top + ((base - top) * i) / n;
+    const y1 = top + ((base - top) * (i + 1)) / n;
+    const pts: P[] = [[x0 - w(y0), y0], [x0 + w(y0), y0], [x0 + w(y1), y1], [x0 - w(y1), y1]];
+    p.poly(pts, null, i % 2 ? '#ffffff' : '#aa0000', 0.6);
+    p.line(pts[0], pts[2], i % 2 ? '#ffffff' : '#aa0000', 0.4);
+    p.line(pts[1], pts[3], i % 2 ? '#ffffff' : '#aa0000', 0.4);
+  }
+  p.rect(x0 - 3, top + 6, 6, 2, '#aa0000', null);
+  p.line([x0, top], [x0, top - 12], '#aa0000', 0.8);
+  p.circle(x0, top - 12, 0.8, '#ff5555', null);
+}
+
 /** distant Lviv: the town hall tower and church domes in haze */
 function skyline(p: Painter): void {
   const c = '#9fbfd0';
   const d = '#7f9fb4';
+  highCastle(p);
   // town hall
   p.rect(186, 150, 18, 110, c, null);
   p.rect(184, 146, 22, 6, d, null);
@@ -512,135 +559,274 @@ function houses(p: Painter): void {
   }
 }
 
-/** across a track: from the near rail away from the viewer (screen units per unit of depth) */
-const AWAY: P = [-0.27, -0.36];
+// ---- trains: a small 3D projection ------------------------------------------------
+//
+// x runs along the track (to the right and slightly up), y is up, z goes away
+// from the viewer (up and to the left). Boxes show their near side, top and
+// left end; cylinders show the faces turned to the viewer, shaded by light.
+
 const ALONG: P = [1, -0.2];
+const DEPTH: P = [-0.42, -0.4];
+/** the direction that projects to a point: a face is visible when its normal points against it */
+const VIEW: [number, number, number] = [-DEPTH[0], ALONG[1] * -DEPTH[0] - DEPTH[1], 1];
 
-/** a track: ballast, sleepers and two rails; `y0` is the near rail at x = 0 */
-function track(p: Painter, y0: number): void {
-  const at = (x: number, depth: number): P => [x + AWAY[0] * depth, y0 + ALONG[1] * x + AWAY[1] * depth];
-  p.poly([at(-40, -6), at(700, -6), at(700, 20), at(-40, 20)], p.dither('#aaaaaa', '#555555', true), null);
-  for (let x = -40; x < 700; x += 8) p.line(at(x, -3), at(x, 17), '#553300', 1.6);
-  for (const d of [0, 14]) {
-    p.line(at(-40, d), at(700, d), '#000', 1.1);
-    p.line(at(-40, d - 0.6), at(700, d - 0.6), '#c8c8c8', 0.4);
+type Shade = string | CanvasPattern;
+
+class Iso {
+  constructor(
+    readonly p: Painter,
+    readonly o: P,
+  ) {}
+
+  pt(x: number, y: number, z: number): P {
+    return [this.o[0] + x * ALONG[0] + z * DEPTH[0], this.o[1] + x * ALONG[1] - y + z * DEPTH[1]];
+  }
+
+  face(pts: [number, number, number][], fill: Shade | null, stroke: string | null = '#000', lw = 0.5): void {
+    this.p.poly(
+      pts.map(([x, y, z]) => this.pt(x, y, z)),
+      fill,
+      stroke,
+      lw,
+    );
+  }
+
+  /** a box: the left end, the top and the near side */
+  box(x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, side: Shade, top: Shade, end: Shade): void {
+    this.face([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], end);
+    this.face([[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], top);
+    this.face([[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]], side);
+  }
+
+  /** a rectangle on the plane z (windows, doors, plates) */
+  rect(x0: number, x1: number, y0: number, y1: number, z: number, fill: Shade, stroke: string | null = '#000'): void {
+    this.face([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]], fill, stroke, 0.4);
+  }
+
+  /**
+   * A prism along x around (yc, zc): angle 0 is straight up. `shades` go from
+   * the darkest to the lightest; `cap` draws the left end.
+   */
+  cylinderX(x0: number, x1: number, yc: number, zc: number, r: number, shades: Shade[], cap: Shade | null, a0 = -Math.PI, a1 = Math.PI, n = 16): void {
+    const at = (a: number, x: number): [number, number, number] => [x, yc + Math.cos(a) * r, zc - Math.sin(a) * r];
+    const seg = (a1 - a0) / n;
+    if (cap) {
+      const pts: [number, number, number][] = [];
+      for (let i = 0; i <= n; ++i) pts.push(at(a0 + i * seg, x0));
+      this.face(pts, cap);
+    }
+    for (let i = 0; i < n; ++i) {
+      const a = a0 + i * seg;
+      const m = a + seg / 2;
+      const ny = Math.cos(m);
+      const nz = -Math.sin(m);
+      if (ny * VIEW[1] + nz * VIEW[2] >= 0) continue;
+      // light from the top left and the viewer
+      const light = Math.max(0, Math.min(0.999, 0.5 + ny * 0.45 - nz * 0.15));
+      const s = shades[Math.floor(light * shades.length)];
+      this.face([at(a, x0), at(a, x1), at(a + seg, x1), at(a + seg, x0)], s, null);
+    }
+    // outline of the silhouette
+    this.p.line(this.pt(x0, yc + r, zc), this.pt(x1, yc + r, zc), '#000', 0.5);
+    this.p.line(this.pt(x0, yc - r * 0.2, zc - r), this.pt(x1, yc - r * 0.2, zc - r), '#000', 0.3);
+  }
+
+  /** a vertical cylinder or a cone frustum (chimneys, domes) */
+  cylinderY(cx: number, cz: number, y0: number, y1: number, r0: number, r1: number, side: Shade, top: Shade): void {
+    const ring = (y: number, r: number) => Array.from({ length: 20 }, (_, i) => this.pt(cx + Math.cos((i / 20) * Math.PI * 2) * r, y, cz + Math.sin((i / 20) * Math.PI * 2) * r));
+    this.p.poly(hull([...ring(y0, r0), ...ring(y1, r1)]), side, '#000', 0.5);
+    this.p.poly(ring(y1, r1), top, '#000', 0.5);
+  }
+
+  /** a spoked wheel in the plane z */
+  wheel(x: number, y: number, z: number, r: number, rim: string): void {
+    const circle = (rr: number) => Array.from({ length: 24 }, (_, i) => this.pt(x + Math.cos((i / 24) * Math.PI * 2) * rr, y + Math.sin((i / 24) * Math.PI * 2) * rr, z));
+    this.p.poly(circle(r), rim, '#000', 0.6);
+    this.p.poly(circle(r * 0.8), '#000000', null);
+    const n = r > 10 ? 14 : 8;
+    for (let i = 0; i < n; ++i) {
+      const a = (i / n) * Math.PI * 2;
+      this.p.line(this.pt(x, y, z), this.pt(x + Math.cos(a) * r * 0.8, y + Math.sin(a) * r * 0.8, z), rim, r > 10 ? 1 : 0.6);
+    }
+    this.p.poly(circle(r * 0.2), rim, '#000', 0.4);
+  }
+
+  /** draws in the plane z with x to the right and y down (text on the sides) */
+  onPlane(z: number, fn: () => void): void {
+    const o = this.pt(0, 0, z);
+    const g = this.p.g;
+    g.save();
+    g.transform(ALONG[0], ALONG[1], 0, 1, o[0], o[1]);
+    fn();
+    g.restore();
   }
 }
 
-/** spoked wheel */
-function wheel(p: Painter, x: number, y: number, r: number, rim = '#ddaa00'): void {
-  p.circle(x, y, r, rim);
-  p.circle(x, y, r * 0.78, '#000000', null);
-  const n = r > 10 ? 12 : 8;
+/** convex hull (monotone chain) */
+function hull(pts: P[]): P[] {
+  const s = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: P, a: P, b: P) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: P[] = [];
+  for (const q of s) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  const upper: P[] = [];
+  for (let i = s.length - 1; i >= 0; --i) {
+    const q = s[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+const GAUGE = 20;
+/** the near rails of the two tracks at x = 0 and where the engine's front is */
+const FAR_Y = 446;
+const NEAR_Y = 508;
+const NEAR_X = 236;
+
+/** a track: ballast, sleepers and two rails along y = 0 */
+function track(t: Iso): void {
+  const p = t.p;
+  t.face([[-80, 0, -9], [800, 0, -9], [800, 0, GAUGE + 9], [-80, 0, GAUGE + 9]], p.dither('#aaaaaa', '#555555', true), null);
+  for (let x = -80; x < 800; x += 7) t.face([[x, 0.6, -5], [x + 3, 0.6, -5], [x + 3, 0.6, GAUGE + 5], [x, 0.6, GAUGE + 5]], '#553300', null);
+  for (const z of [0, GAUGE]) {
+    t.face([[-80, 0, z - 0.8], [800, 0, z - 0.8], [800, 2.2, z - 0.8], [-80, 2.2, z - 0.8]], '#555555', null);
+    p.line(t.pt(-80, 2.2, z - 0.4), t.pt(800, 2.2, z - 0.4), '#e4e4e4', 0.6);
+  }
+}
+
+const ROOF = ['#555555', '#555555', '#aaaaaa', '#c8c8c8'];
+
+/** a passenger car (x0..x0+len): body, arched roof, windows, doors, bogies */
+function passengerCar(t: Iso, x0: number, len: number, color: string, light: string, dark: string, label: string): void {
+  const x1 = x0 + len;
+  const p = t.p;
+  // bogies and wheels under the body
+  for (const bx of [x0 + 26, x1 - 26]) {
+    t.box(bx - 16, bx + 16, 5, 9, 1, 21, '#555555', '#555555', '#000000');
+    for (const dx of [-9, 9]) t.wheel(bx + dx, 6.5, -0.5, 6.5, '#aaaaaa');
+  }
+  t.box(x0 + 44, x1 - 44, 6, 10, 4, 18, '#000000', '#000000', '#000000');
+  // body: the near side has two tones and a lining
+  t.box(x0, x1, 10, 42, 0, 22, color, light, p.dither(color, dark));
+  t.rect(x0, x1, 10, 18, -0.05, p.dither(color, dark), null);
+  t.rect(x0, x1, 18, 19.5, -0.06, '#ddaa00', null);
+  // roof
+  t.cylinderX(x0 - 2, x1 + 2, 38, 11, 13, ROOF, '#aaaaaa', -1.2, 1.2, 8);
+  // windows and the end doors
+  const n = Math.floor((len - 40) / 13);
   for (let i = 0; i < n; ++i) {
-    const a = (i / n) * Math.PI * 2;
-    p.line([x, y], [x + Math.cos(a) * r * 0.78, y + Math.sin(a) * r * 0.78], rim, r > 10 ? 1.1 : 0.7);
+    const wx = x0 + 22 + i * 13;
+    t.rect(wx, wx + 9, 24, 36, -0.1, '#fff8e0');
+    t.rect(wx + 1, wx + 8, 25, 35, -0.15, '#4878a0', null);
+    t.rect(wx + 1, wx + 8, 31, 35, -0.16, '#88c8e8', null);
   }
-  p.circle(x, y, r * 0.18, rim);
-}
-
-/** the top (roof) face of a box seen from above: a parallelogram away from the viewer */
-function topFace(p: Painter, s0: number, s1: number, y: number, depth: number, fill: string | CanvasPattern): void {
-  const a: P = [s0, y];
-  const b: P = [s1, y];
-  const dx = AWAY[0] * depth;
-  // inside the train frame the y axis is unskewed: undo the along-slope for the depth vector
-  const dy = AWAY[1] * depth;
-  p.poly([a, b, [b[0] + dx, b[1] + dy - ALONG[1] * dx], [a[0] + dx, a[1] + dy - ALONG[1] * dx]], fill);
-}
-
-function passengerCar(p: Painter, s0: number, len: number, color: string, dark: string, label: string): void {
-  const s1 = s0 + len;
-  topFace(p, s0 + 2, s1 - 2, -64, 24, p.dither('#555555', '#aaaaaa'));
-  p.rect(s0 + 2, -68, len - 4, 6, '#555555');
-  p.rect(s0, -62, len, 40, color);
-  p.rect(s0, -38, len, 8, p.dither(color, dark));
-  // windows and doors at both ends
-  for (let x = s0 + 18; x < s1 - 22; x += 12.5) p.rect(x, -56, 8, 12, '#88c8e8');
-  for (const x of [s0 + 4, s1 - 13]) p.rect(x, -58, 9, 34, dark);
-  p.text(label, s0 + len / 2, -33.6, 'bold 7.5px Georgia, serif', '#ffff55', 'center', '#000000');
-  p.rect(s0 - 3, -26, len + 6, 4, '#000000', null);
-  for (const x of [s0 + 18, s0 + 34, s1 - 34, s1 - 18]) wheel(p, x, -7, 7, '#555555');
-  p.rect(s0 + 12, -12, 28, 3, '#000000', null);
-  p.rect(s1 - 40, -12, 28, 3, '#000000', null);
-}
-
-/** the steam engine and its train on the near track, going left */
-function nearTrain(p: Painter, o: P): void {
-  p.inFrame(o, ALONG, () => {
-    passengerCar(p, 214, 140, '#aa0000', '#553300', 'ЛЬВІВ — КИЇВ');
-    passengerCar(p, 360, 140, '#00aa00', '#006600', 'ОДЕСА — ЛЬВІВ');
-    // tender: coal and the railway emblem
-    topFace(p, 152, 204, -58, 24, p.dither('#000000', '#555555'));
-    p.rect(150, -58, 56, 34, '#0000aa');
-    p.rect(150, -58, 56, 4, '#5555ff');
-    p.circle(178, -42, 8, '#ddaa00');
-    p.text('УЗ', 178, -41.6, 'bold 8px Georgia, serif', '#0000aa');
-    for (const x of [162, 192]) wheel(p, x, -9, 9, '#ddaa00');
-    // cab
-    topFace(p, 103, 148, -92, 26, '#555555');
-    p.rect(103, -92, 45, 5, '#000000');
-    p.rect(106, -88, 40, 62, '#0000aa');
-    p.rect(112, -82, 26, 18, '#88c8e8');
-    p.line([125, -82], [125, -64], '#000', 0.6);
-    p.rect(110, -52, 32, 10, '#ddaa00');
-    p.text('Л-1', 126, -46.8, 'bold 8px Georgia, serif', '#000000');
-    // boiler with bands, domes, the chimney and the headlight
-    topFace(p, 8, 106, -62, 22, '#5555ff');
-    p.rect(8, -62, 98, 34, '#0000aa');
-    p.rect(8, -60, 98, 6, '#5555ff', null);
-    for (const x of [32, 58, 84]) p.rect(x, -62, 3, 34, '#ddaa00');
-    // smokebox and the round front of the boiler (seen at an angle)
-    p.rect(2, -62, 14, 34, '#000000');
-    p.ellipse(0.5, -49, 4.5, 17, '#555555');
-    p.ellipse(0.5, -49, 3, 13, '#000000', '#aaaaaa', 0.5);
-    p.text('★', 0.6, -49, 'bold 6px Georgia, serif', '#ddaa00');
-    p.g.beginPath();
-    p.g.moveTo(52, -62);
-    p.g.quadraticCurveTo(52, -76, 61, -76);
-    p.g.quadraticCurveTo(70, -76, 70, -62);
-    p.g.fillStyle = '#ddaa00';
-    p.g.fill();
-    p.g.stroke();
-    p.rect(80, -70, 12, 8, '#ddaa00');
-    // a diamond stack like the old engines
-    p.poly([[25, -62], [29, -62], [31, -78], [37, -90], [17, -90], [23, -78]], '#000000');
-    p.rect(16, -92, 22, 3, '#555555');
-    p.rect(5, -72, 10, 9, '#000000');
-    p.rect(2, -71, 3, 7, '#ffff55');
-    // running board, cylinder, wheels and rods
-    p.rect(4, -28, 140, 5, '#000000');
-    p.rect(14, -26, 22, 14, '#555555');
-    for (const x of [20, 40]) wheel(p, x, -8, 8);
-    for (const x of [72, 112]) wheel(p, x, -17, 17);
-    p.line([30, -19], [112, -21], '#c8c8c8', 1.6);
-    p.line([72, -21], [112, -21], '#aa0000', 1.6);
-    // cowcatcher
-    p.poly([[4, -18], [-14, -1], [6, -1]], '#aa0000');
-    for (let k = -10; k < 6; k += 4) p.line([k, -1], [4, -18 + (k + 14) * 0.4], '#000', 0.5);
-    // a little puff by the cylinder
-    p.circle(8, -6, 4, '#ffffff', null);
-    p.circle(2, -4, 3, '#e4e4e4', null);
+  for (const dx of [x0 + 5, x1 - 15]) {
+    t.rect(dx, dx + 10, 11, 39, -0.1, dark);
+    t.rect(dx + 2, dx + 8, 28, 36, -0.15, '#4878a0');
+  }
+  // end: a door and a gangway
+  t.face([[x0, 12, 6], [x0, 12, 16], [x0, 36, 16], [x0, 36, 6]], dark);
+  // the route board
+  t.onPlane(-0.2, () => {
+    p.rect(x0 + len / 2 - 32, -17.2, 64, 7, '#fff8e0', '#000', 0.4);
+    p.text(label, x0 + len / 2, -13.5, 'bold 5.6px Georgia, serif', '#000000');
   });
+}
+
+const BLUE = ['#000000', '#0000aa', '#0000aa', '#5555ff', '#5555ff'];
+const BLACK = ['#000000', '#000000', '#555555', '#aaaaaa'];
+const GOLD = ['#aa5500', '#ddaa00', '#ddaa00', '#ffff55'];
+
+/** a steam engine and its tender going left (front at x = 0) */
+function engine(t: Iso, ox: number): void {
+  const p = t.p;
+  const X = (x: number) => ox + x;
+  // tender
+  for (const x of [162, 194]) t.wheel(X(x), 9, -0.5, 9, '#ddaa00');
+  t.box(X(152), X(206), 14, 58, 0, 22, '#0000aa', '#5555ff', '#000055');
+  t.rect(X(152), X(206), 54, 58, -0.05, '#5555ff', null);
+  // coal heap
+  t.face([[X(156), 58, 3], [X(202), 58, 3], [X(198), 64, 11], [X(160), 64, 11]], p.dither('#000000', '#555555'));
+  t.face([[X(160), 64, 11], [X(198), 64, 11], [X(202), 58, 19], [X(156), 58, 19]], '#000000');
+  t.onPlane(-0.1, () => {
+    p.circle(X(179), -36, 9, '#ddaa00', '#000', 0.5);
+    p.text('УЗ', X(179), -35.6, 'bold 8px Georgia, serif', '#0000aa');
+  });
+  // frame and running board
+  t.box(X(-2), X(150), 20, 26, -2, 24, '#000000', '#555555', '#000000');
+  // cylinders
+  t.cylinderX(X(12), X(36), 18, 2, 6, BLACK, '#555555');
+  // cab (behind the boiler)
+  t.box(X(108), X(148), 26, 88, -1, 23, '#0000aa', '#5555ff', '#000055');
+  t.box(X(104), X(152), 88, 92, -4, 26, '#555555', '#aaaaaa', '#555555');
+  t.rect(X(114), X(140), 58, 80, -1.1, '#fff8e0');
+  t.rect(X(116), X(138), 60, 78, -1.15, '#4878a0', null);
+  t.rect(X(116), X(138), 70, 78, -1.16, '#88c8e8', null);
+  t.rect(X(112), X(142), 36, 46, -1.1, '#ddaa00');
+  t.onPlane(-1.2, () => p.text('Л-1', X(127), -41, 'bold 8px Georgia, serif', '#000000'));
+  // boiler: bands, the smokebox and its round door
+  const bands = [26, 54, 82];
+  let x = 14;
+  for (const b of [...bands, 108]) {
+    t.cylinderX(X(x), X(b), 46, 11, 15, BLUE, x === 14 ? '#0000aa' : null);
+    if (b < 108) t.cylinderX(X(b), X(b + 3), 46, 11, 15.4, GOLD, null);
+    x = b + 3;
+  }
+  t.cylinderX(X(2), X(14), 46, 11, 15.6, BLACK, '#555555');
+  {
+    const c = t.pt(X(2), 46, 11);
+    p.ellipse(c[0], c[1], 5.2, 12, '#000000', '#aaaaaa', 0.6);
+    p.text('★', c[0], c[1], 'bold 6px Georgia, serif', '#ddaa00');
+  }
+  // domes, the chimney and the headlight
+  t.cylinderY(X(62), 11, 58, 66, 6, 5, p.dither('#ddaa00', '#aa5500'), '#ffff55');
+  t.cylinderY(X(88), 11, 59, 64, 4, 3.5, '#0000aa', '#5555ff');
+  t.cylinderY(X(24), 11, 58, 72, 3.5, 4, '#000000', '#555555');
+  t.cylinderY(X(24), 11, 72, 84, 4, 8, '#000000', '#555555');
+  t.box(X(4), X(14), 62, 70, 6, 16, '#000000', '#555555', '#000000');
+  t.face([[X(4), 63, 8], [X(4), 63, 14], [X(4), 69, 14], [X(4), 69, 8]], '#ffff55');
+  // wheels and rods
+  for (const x of [22, 42]) t.wheel(X(x), 8, -2.5, 8, '#ddaa00');
+  for (const x of [72, 110]) t.wheel(X(x), 17, -2.5, 17, '#ddaa00');
+  p.line(t.pt(X(72), 12, -3.5), t.pt(X(110), 12, -3.5), '#aa0000', 1.6);
+  p.line(t.pt(X(30), 18, -3.5), t.pt(X(72), 12, -3.5), '#c8c8c8', 1.2);
+  // cowcatcher
+  t.face([[X(-14), 1, 1], [X(2), 16, 1], [X(2), 16, 21], [X(-14), 1, 21]], '#aa0000');
+  t.face([[X(-14), 1, 1], [X(2), 1, 1], [X(2), 16, 1]], '#550000' as string);
+  for (let z = 4; z < 21; z += 4) p.line(t.pt(X(-14), 1, z), t.pt(X(2), 16, z), '#000', 0.5);
+}
+
+/** the steam engine and its train on the near track */
+function nearTrain(t: Iso): void {
+  // far cars first: they are behind the ones on the left
+  passengerCar(t, NEAR_X + 360, 140, '#00aa00', '#55ff55', '#006600', 'ОДЕСА — ЛЬВІВ');
+  passengerCar(t, NEAR_X + 214, 140, '#aa0000', '#ff5555', '#550000', 'ЛЬВІВ — КИЇВ');
+  engine(t, NEAR_X);
 }
 
 /** a train waiting at the platform on the far track */
-function farTrain(p: Painter, o: P): void {
-  p.inFrame(o, ALONG, () => {
-    // a mail van and a passenger car
-    topFace(p, 2, 118, -60, 22, p.dither('#555555', '#aaaaaa'));
-    p.rect(0, -60, 120, 38, '#ddaa00');
-    p.rect(0, -60, 120, 4, '#ffff55', null);
-    for (const x of [20, 70]) p.rect(x, -54, 22, 28, '#aa5500');
-    p.text('ПОШТА', 60, -38, 'bold 9px Georgia, serif', '#aa0000', 'center', '#000000');
-    for (const x of [14, 30, 90, 106]) wheel(p, x, -7, 7, '#555555');
-    passengerCar(p, 126, 140, '#0000aa', '#000055', 'УЖГОРОД');
-  });
+function farTrain(t: Iso): void {
+  const x0 = 330;
+  passengerCar(t, x0 + 126, 140, '#0000aa', '#5555ff', '#000055', 'УЖГОРОД — ЛЬВІВ');
+  // a mail van
+  const p = t.p;
+  for (const bx of [x0 + 22, x0 + 98]) {
+    t.box(bx - 14, bx + 14, 5, 9, 1, 21, '#555555', '#555555', '#000000');
+    for (const dx of [-8, 8]) t.wheel(bx + dx, 6.5, -0.5, 6.5, '#aaaaaa');
+  }
+  t.box(x0, x0 + 120, 10, 42, 0, 22, '#ddaa00', '#ffff55', p.dither('#ddaa00', '#aa5500'));
+  t.cylinderX(x0 - 2, x0 + 122, 38, 11, 13, ROOF, '#aaaaaa', -1.2, 1.2, 8);
+  for (const dx of [18, 78]) t.rect(x0 + dx, x0 + dx + 24, 12, 38, -0.1, '#aa5500');
+  t.onPlane(-0.2, () => p.text('ПОШТА', x0 + 60, -26, 'bold 9px Georgia, serif', '#aa0000', 'center', '#000000'));
 }
 
 /** the platform: an edge, the station name board and a signal */
 function platform(p: Painter): void {
-  const edge = (x: number) => 392 - 0.2 * (x - 214);
+  // just behind the far track
+  const edge = (x: number) => FAR_Y - 0.2 * x - 13;
   p.poly([[150, edge(150) - 25], [640, edge(640) - 25], [640, edge(640)], [150, edge(150)]], '#e4e4e4', null);
   p.line([150, edge(150)], [640, edge(640)], '#ffffff', 1.2);
   p.line([150, edge(150) + 1], [640, edge(640) + 1], '#555555', 0.6);
@@ -726,9 +912,8 @@ function quantize(g: CanvasRenderingContext2D): void {
   g.putImageData(img, 0, 0);
 }
 
-/** the chimney of the engine (physical pixels), for the animated smoke */
-const NEAR_TRAIN: P = [236, 508 - 0.2 * 236];
-const CHIMNEY: P = [NEAR_TRAIN[0] + 27, NEAR_TRAIN[1] + ALONG[1] * 27 - 92];
+/** the chimney top of the engine (physical pixels), for the animated smoke */
+const CHIMNEY: P = [NEAR_X + 24 + 11 * DEPTH[0], NEAR_Y + ALONG[1] * (NEAR_X + 24) - 84 + 11 * DEPTH[1]];
 
 let cached: HTMLCanvasElement | null = null;
 
@@ -749,10 +934,12 @@ export function posterImage(): HTMLCanvasElement {
   platform(p);
   houses(p);
   corner(p);
-  track(p, 446);
-  farTrain(p, [330, 446 - 0.2 * 330]);
-  track(p, 508);
-  nearTrain(p, [NEAR_TRAIN[0], NEAR_TRAIN[1]]);
+  const far = new Iso(p, [0, FAR_Y]);
+  track(far);
+  farTrain(far);
+  const near = new Iso(p, [0, NEAR_Y]);
+  track(near);
+  nearTrain(near);
   ribbon(p);
   g.setTransform(1, 0, 0, 1, 0, 0);
   quantize(g);
