@@ -43,7 +43,9 @@ export async function probe(page: Page): Promise<Probe> {
 /** test mode: advance the virtual time in 1/60 s frames */
 export async function advance(page: Page, seconds: number): Promise<void> {
   await page.evaluate((s) => {
-    for (let t = 0; t < s * 1e6; t += 16667) window.__parovozyky!.step(16667);
+    const end = s * 1e6;
+    // presentation events (explosions, construction stages) are delivered per step either way
+    for (let t = 0; t < end; t += 16667) window.__parovozyky!.step(16667, t + 16667 >= end);
   }, seconds);
 }
 

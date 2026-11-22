@@ -4,12 +4,15 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { type Sim, type World, tables } from '@parovozyky/sim';
 
 const { allowedRailCursorTypes } = tables;
-import { cameraSetup, layoutFor, type Layout, worldFromLogical } from './projection';
+import { SIN_ELEV, cameraSetup, layoutFor, type Layout, logicalFromWorld, visibleExtent, worldFromLogical } from './projection';
 import { centerline, tileOrigin } from './railGeometry';
-import { PALETTE, colorOf } from './palette';
+import { colorOf } from './palette';
 import { TrainInterpolator } from './interpolation';
 import { buildCarriageModel } from './models';
 import { GeometryBuilder, trs } from './merge';
+import { Nature, type Obstacle, groundMesh, prng } from './nature';
+import { addHouse, addTree } from './scenery';
+import { Animals, Smoke } from './life';
 
 const STEEL_GAUGE = 3.6;
 const BALLAST_HALF = 9;
@@ -33,8 +36,9 @@ function railPoint(rail: { x: number; y: number; type: number }, step: number, h
 }
 
 /** a flat ribbon along a polyline (in the XZ plane, at height h) */
-function ribbon(points: THREE.Vector3[], offsetA: number, offsetB: number, h: number): THREE.BufferGeometry {
+function ribbon(points: THREE.Vector3[], offsetA: number, offsetB: number, h: number, hB = h): THREE.BufferGeometry {
   const pos: number[] = [];
+  const uv: number[] = [];
   const idx: number[] = [];
   for (let i = 0; i < points.length; ++i) {
     const a = points[Math.max(0, i - 1)];
@@ -42,7 +46,8 @@ function ribbon(points: THREE.Vector3[], offsetA: number, offsetB: number, h: nu
     const t = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
     const n = new THREE.Vector3(-t.z, 0, t.x);
     const p = points[i];
-    pos.push(p.x + n.x * offsetA, h, p.z + n.z * offsetA, p.x + n.x * offsetB, h, p.z + n.z * offsetB);
+    pos.push(p.x + n.x * offsetA, h, p.z + n.z * offsetA, p.x + n.x * offsetB, hB, p.z + n.z * offsetB);
+    uv.push((p.x + n.x * offsetA) / 24, (p.z + n.z * offsetA) / 24, (p.x + n.x * offsetB) / 24, (p.z + n.z * offsetB) / 24);
     if (i > 0) {
       const k = i * 2;
       idx.push(k - 2, k - 1, k, k - 1, k + 1, k);
@@ -50,29 +55,62 @@ function ribbon(points: THREE.Vector3[], offsetA: number, offsetB: number, h: nu
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
 }
 
-const SLEEPER = new THREE.BoxGeometry(BALLAST_HALF * 1.6, 1.2, 2.2);
+/** gravel for the ballast */
+function gravelTexture(): THREE.Texture {
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#8d8a83';
+  g.fillRect(0, 0, size, size);
+  const r = prng(5);
+  for (let i = 0; i < 1400; ++i) {
+    const v = 95 + Math.floor(r() * 90);
+    g.fillStyle = `rgb(${v + 6},${v + 2},${v - 4})`;
+    const x = r() * size;
+    const y = r() * size;
+    const s = 1 + r() * 2.5;
+    g.fillRect(x, y, s, s * (0.6 + r() * 0.6));
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+const SLEEPER = new THREE.BoxGeometry(BALLAST_HALF * 1.5, 1.2, 2);
 const STOP_POST = new THREE.BoxGeometry(1.6, 8, 1.6);
 const STOP_BEAM = new THREE.BoxGeometry(BALLAST_HALF * 1.5, 3, 1.6);
 const STOP_STRIPE = new THREE.BoxGeometry(BALLAST_HALF * 0.5, 3.1, 0.3);
-const TRUNK = new THREE.CylinderGeometry(1.4, 1.8, 7, 6);
-const CROWN = new THREE.ConeGeometry(7, 18, 7);
-const ROUND = new THREE.SphereGeometry(8, 8, 6);
-const MAST = new THREE.CylinderGeometry(0.8, 1, 22, 6);
-const LAMP = new THREE.SphereGeometry(3, 10, 8);
+const MAST = new THREE.CylinderGeometry(0.7, 0.9, 20, 6);
+const LAMP = new THREE.SphereGeometry(1.9, 10, 8);
+const SEM_BASE = new THREE.BoxGeometry(4, 2, 4);
+const SEM_HEAD = new THREE.BoxGeometry(5, 12, 2.4);
+const SEM_VISOR = new THREE.BoxGeometry(4.4, 0.6, 2.2);
+const SEM_CAP = new THREE.CylinderGeometry(2.6, 2.6, 0.8, 10);
 const DISK = new THREE.CylinderGeometry(4, 4, 1.5, 12);
 const LEVER = new THREE.BoxGeometry(2, 2, 12);
 const FLAG = new THREE.BoxGeometry(1, 10, 12);
+const PORTAL_PILLAR = new THREE.BoxGeometry(5, 30, 5);
+const PORTAL_BAND = new THREE.BoxGeometry(5.6, 1.2, 5.6);
+const PORTAL_CAP = new THREE.BoxGeometry(6.4, 2, 6.4);
+const PORTAL_LANTERN = new THREE.SphereGeometry(1.6, 8, 6);
+const PORTAL_BEAM = new THREE.BoxGeometry(38, 4, 5);
+const PORTAL_SIGN = new THREE.BoxGeometry(24, 8, 5);
+const PORTAL_SIGN_IN = new THREE.BoxGeometry(21, 5.6, 5);
 
 interface Layers {
   plan: THREE.BufferGeometry[];
   ballast: THREE.BufferGeometry[];
   ballastBuilding: THREE.BufferGeometry[];
   steel: THREE.BufferGeometry[];
+  rust: THREE.BufferGeometry[];
   sleepers: GeometryBuilder;
 }
 
@@ -103,6 +141,12 @@ export class ModernRenderer {
     new THREE.MeshBasicMaterial({ color: 0xfff066, transparent: true, opacity: 0.9, depthTest: false }),
   );
 
+  private readonly nature = new Nature();
+  private readonly smoke = new Smoke();
+  private readonly animals = new Animals();
+  /** steam engines: the last chimney position and puff time */
+  private readonly chimneys = new Map<number, { x: number; z: number; t: number }>();
+  private natureSig = '';
   private railSig = '';
   private objectSig = -1;
   private signalSig = -1;
@@ -110,16 +154,18 @@ export class ModernRenderer {
   private readonly stages = new Map<string, { key: RailKey; stage: number }>();
   private readonly interp = new TrainInterpolator();
   private readonly carriageMeshes = new Map<number, THREE.Mesh>();
-  private readonly explosions: { obj: THREE.Points; t0: number; vel: Float32Array }[] = [];
+  private readonly explosions: { obj: THREE.Points; t0: number; vel: Float32Array; origin: { x: number; z: number } }[] = [];
 
   private readonly mats = {
-    ballast: new THREE.MeshLambertMaterial({ color: 0x8c8a84 }),
+    ballast: new THREE.MeshLambertMaterial({ color: 0xffffff, map: gravelTexture() }),
     ballastBuilding: new THREE.MeshLambertMaterial({ color: 0x6b6a66, transparent: true, opacity: 0.7 }),
-    steel: new THREE.MeshLambertMaterial({ color: 0x2b2b30 }),
+    steel: new THREE.MeshLambertMaterial({ color: 0xb8bcc4 }),
+    rust: new THREE.MeshLambertMaterial({ color: 0x5a4032, side: THREE.DoubleSide }),
     sleeper: new THREE.MeshLambertMaterial({ color: 0x5a3b22 }),
     plan: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false }),
     ghost: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }),
     vertex: new THREE.MeshLambertMaterial({ vertexColors: true }),
+    flat: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
     lamp: new THREE.MeshBasicMaterial({ vertexColors: true }),
     trunk: new THREE.MeshLambertMaterial({ color: 0x6b4423 }),
     roof: new THREE.MeshLambertMaterial({ color: 0x7a2e1d }),
@@ -152,13 +198,7 @@ export class ModernRenderer {
     this.scene.add(this.sun);
 
     // ground: the field plus a decorative margin for wide screens
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(6000, 8000),
-      new THREE.MeshLambertMaterial({ color: new THREE.Color(PALETTE[0]).multiplyScalar(0.92) }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    this.scene.add(ground);
+    this.scene.add(groundMesh(), this.nature.group, this.smoke.mesh, this.animals.group);
 
     this.gridLines = this.buildGrid();
     this.blocked = this.buildBlockedArea();
@@ -176,6 +216,8 @@ export class ModernRenderer {
     this.camera.position.set(s.position.x, s.position.y, s.position.z);
     this.camera.lookAt(s.target.x, s.target.y, s.target.z);
     this.camera.updateProjectionMatrix();
+    const ext = visibleExtent(this.layout);
+    this.animals.extent = { halfW: ext.halfW, halfZ: Math.min(ext.halfH / SIN_ELEV, 720) };
   }
 
   get currentLayout(): Layout {
@@ -195,14 +237,27 @@ export class ModernRenderer {
     }
   }
 
+  /** 1: everything; 0: no grass and flowers (slow GPUs) */
+  get detail(): number {
+    return this.nature.detail;
+  }
+
+  set detail(v: number) {
+    this.nature.detail = v;
+  }
+
   render(sim: Sim, nowMs: number): void {
     const w = sim.world;
     this.updateRails(w);
     this.updateObjects(w);
+    this.updateNature(w);
+    this.nature.update(nowMs);
     this.updateSignals(w);
     this.updateCursor(w);
     this.updateTrains(w, sim.now, nowMs);
     this.updateFx(nowMs);
+    this.smoke.update(nowMs);
+    this.animals.update(nowMs);
     this.gridLines.visible = w.gridVisible;
     this.blocked.visible = w.gridVisible;
     this.updateHighlight(w);
@@ -234,7 +289,7 @@ export class ModernRenderer {
     disposeChildren(this.railGroup);
 
     const builtSet = new Set(built.map(railKey));
-    const layers: Layers = { plan: [], ballast: [], ballastBuilding: [], steel: [], sleepers: new GeometryBuilder() };
+    const layers: Layers = { plan: [], ballast: [], ballastBuilding: [], steel: [], rust: [], sleepers: new GeometryBuilder() };
     for (const k of built) {
       const r = w.rail(k.tileX, k.tileY, k.type);
       this.addTrack(layers, r, r.minPathStep, r.maxPathStep, 'built');
@@ -259,6 +314,7 @@ export class ModernRenderer {
     addLayer(layers.ballast, this.mats.ballast, true);
     addLayer(layers.ballastBuilding, this.mats.ballastBuilding, true);
     addLayer(layers.steel, this.mats.steel, false);
+    addLayer(layers.rust, this.mats.rust, false);
     addLayer(layers.plan, this.mats.plan, false);
     if (!layers.sleepers.empty) {
       const m = new THREE.Mesh(layers.sleepers.build(), this.mats.vertex);
@@ -270,19 +326,22 @@ export class ModernRenderer {
       const e = w.entrances[i];
       const p = worldFromLogical(e.rail.x, e.rail.y);
       const portal = new THREE.Group();
-      const mat = new THREE.MeshLambertMaterial({ color: colorOf(e.bgColor) });
-      const dark = new THREE.MeshLambertMaterial({ color: colorOf(e.fgColor) });
-      const postGeo = new THREE.BoxGeometry(4, 34, 4);
-      for (const s of [-1, 1]) {
-        const post = new THREE.Mesh(postGeo, dark);
-        post.position.set(s * 14, 17, 0);
-        post.castShadow = true;
-        portal.add(post);
+      const pb = new GeometryBuilder();
+      const bg = colorOf(e.bgColor);
+      const fg = colorOf(e.fgColor);
+      for (const sd of [-1, 1]) {
+        // stone pillars with a cap and a lantern
+        pb.add(PORTAL_PILLAR, 0x9b9388, trs(sd * 15, 15, 0));
+        pb.add(PORTAL_BAND, 0x7c756b, trs(sd * 15, 8, 0));
+        pb.add(PORTAL_CAP, 0x6d675f, trs(sd * 15, 31, 0));
+        pb.add(PORTAL_LANTERN, 0xfff2b0, trs(sd * 15, 34, 0));
       }
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(36, 7, 6), mat);
-      beam.position.set(0, 36, 0);
-      beam.castShadow = true;
-      portal.add(beam);
+      pb.add(PORTAL_BEAM, 0x6d675f, trs(0, 37, 0));
+      pb.add(PORTAL_SIGN, fg, trs(0, 37, 0.4));
+      pb.add(PORTAL_SIGN_IN, bg, trs(0, 37, 0.8));
+      const mesh = new THREE.Mesh(pb.build(), this.mats.flat);
+      mesh.castShadow = true;
+      portal.add(mesh);
       portal.position.set(p.x, 0, p.z);
       portal.rotation.y = e.rail.x < 320 ? Math.PI / 4 : -Math.PI / 4;
       portal.userData.entrance = i;
@@ -303,21 +362,30 @@ export class ModernRenderer {
       layers.plan.push(ribbon(pts, -BALLAST_HALF, BALLAST_HALF, 0.6));
       return;
     }
-    (kind === 'ballast' ? layers.ballastBuilding : layers.ballast).push(ribbon(pts, -BALLAST_HALF, BALLAST_HALF, 0.5));
+    const ballast = kind === 'ballast' ? layers.ballastBuilding : layers.ballast;
+    ballast.push(ribbon(pts, -BALLAST_HALF + 1.5, BALLAST_HALF - 1.5, 1));
+    // sloped shoulders down to the ground
+    ballast.push(ribbon(pts, -BALLAST_HALF - 2, -BALLAST_HALF + 1.5, 0.05, 1));
+    ballast.push(ribbon(pts, BALLAST_HALF - 1.5, BALLAST_HALF + 2, 1, 0.05));
     if (kind === 'ballast') return;
-    const step = 6;
-    for (let k = 3; k < pts.length; k += step) {
+    const step = 4;
+    for (let k = 2; k < pts.length; k += step) {
       const a = pts[Math.max(0, k - 1)];
       const b = pts[Math.min(pts.length - 1, k + 1)];
       const ang = Math.atan2(b.x - a.x, b.z - a.z);
-      layers.sleepers.add(SLEEPER, 0x5a3b22, trs(pts[k].x, 1, pts[k].z, ang + Math.PI / 2));
+      layers.sleepers.add(SLEEPER, (k * 7) % 3 ? 0x5a3b22 : 0x4c321e, trs(pts[k].x, 1.5, pts[k].z, ang + Math.PI / 2));
     }
     if (kind === 'sleepers') return;
     const lo = Math.max(0, minStep);
     const hi = Math.min(pts.length - 1, maxStep);
     if (hi <= lo) return;
     const steel = pts.slice(lo, hi + 1);
-    for (const sgn of [-1, 1]) layers.steel.push(ribbon(steel, sgn * STEEL_GAUGE - 0.7, sgn * STEEL_GAUGE + 0.7, 2));
+    // rails: a shiny head on top of a darker web
+    for (const sgn of [-1, 1]) {
+      layers.steel.push(ribbon(steel, sgn * STEEL_GAUGE - 0.6, sgn * STEEL_GAUGE + 0.6, 2.9));
+      layers.rust.push(ribbon(steel, sgn * STEEL_GAUGE - 0.6, sgn * STEEL_GAUGE - 0.6, 2.1, 2.9));
+      layers.rust.push(ribbon(steel, sgn * STEEL_GAUGE + 0.6, sgn * STEEL_GAUGE + 0.6, 2.9, 2.1));
+    }
   }
 
   private addBufferStop(layers: Layers, rail: { x: number; y: number; type: number }, slot: number): void {
@@ -352,23 +420,51 @@ export class ModernRenderer {
     for (const o of w.staticObjects) {
       // glyphs are 16x16 at (x, y); the object stands at the bottom centre
       const base = worldFromLogical(o.x + 8, o.y + 14);
-      if (o.kind === 3) {
-        b.add(TRUNK, 0x6b4423, trs(base.x, 3.5, base.z));
-        const crown = new THREE.Color(colorOf(o.color)).multiplyScalar(0.85).getHex();
-        if (o.type % 2) b.add(ROUND, crown, trs(base.x, 13, base.z));
-        else b.add(CROWN, crown, trs(base.x, 15, base.z));
-      } else if (o.kind === 2) {
-        const wdt = 12 + (o.type % 3) * 3;
-        const h = 12 + o.type * 2;
-        b.add(new THREE.BoxGeometry(wdt, h, 12), colorOf(o.color), trs(base.x, h / 2, base.z, Math.PI / 4));
-        b.add(new THREE.ConeGeometry(wdt * 0.8, 8, 4).rotateY(Math.PI / 4), 0x7a2e1d, trs(base.x, h + 4, base.z, Math.PI / 4));
-      }
+      // future houses (kind 1) are invisible, as in the original
+      if (o.kind === 3) addTree(b, base.x, base.z, o.type, colorOf(o.color));
+      else if (o.kind === 2) addHouse(b, base.x, base.z, o.type, colorOf(o.color));
     }
     if (b.empty) return;
-    const m = new THREE.Mesh(b.build(), this.mats.vertex);
+    const m = new THREE.Mesh(b.build(), this.mats.flat);
     m.castShadow = true;
     m.receiveShadow = true;
     this.objectGroup.add(m);
+  }
+
+  // ---- grass, flowers, stones, bushes -------------------------------------------
+
+  private updateNature(w: World): void {
+    const sig = `${this.railSig}#${this.objectSig}`;
+    if (sig === this.natureSig) return;
+    this.natureSig = sig;
+    const obstacles: Obstacle[] = [];
+    const along = (rail: { x: number; y: number; type: number }, r: number) => {
+      const n = centerline(rail.type).length;
+      for (let i = 0; i < n; i += 3) {
+        const p = railPoint(rail, i);
+        obstacles.push({ x: p.x, z: p.z, r });
+      }
+    };
+    for (let i = 0; i < w.railRoadCount; ++i) {
+      const ri = w.railRoad[i];
+      along(w.rail(ri.tileX, ri.tileY, ri.railType), BALLAST_HALF + 3);
+    }
+    for (const st of this.stages.values()) {
+      const o = tileOrigin(st.key.tileX, st.key.tileY);
+      along({ x: o.x, y: o.y, type: st.key.type }, BALLAST_HALF + 3);
+    }
+    for (let i = 0; i < w.entranceCount; ++i) {
+      const e = w.entrances[i];
+      along(e.rail, BALLAST_HALF + 3);
+      const p = worldFromLogical(e.rail.x, e.rail.y);
+      obstacles.push({ x: p.x, z: p.z, r: 28 });
+    }
+    for (const o of w.staticObjects) {
+      if (o.kind !== 2 && o.kind !== 3) continue;
+      const p = worldFromLogical(o.x + 8, o.y + 14);
+      obstacles.push({ x: p.x, z: p.z, r: o.kind === 2 ? 16 : 8 });
+    }
+    this.nature.rebuild(obstacles, buildableAt);
   }
 
   // ---- switches and semaphores ----------------------------------------------
@@ -394,8 +490,15 @@ export class ModernRenderer {
     for (let i = 0; i < w.semaphoreCount; ++i) {
       const sm = w.semaphores[i];
       const p = worldFromLogical(sm.pixelX, sm.pixelY);
-      solid.add(MAST, 0xdddddd, trs(p.x, 11, p.z));
-      lamps.add(LAMP, sm.isRed ? 0xff2a10 : 0x22ff44, trs(p.x, 23, p.z));
+      solid.add(SEM_BASE, 0x8f8a80, trs(p.x, 1, p.z, Math.PI / 4));
+      solid.add(MAST, 0xe8e8e8, trs(p.x, 11, p.z));
+      solid.add(SEM_HEAD, 0x1d1f22, trs(p.x, 21.5, p.z + 0.8));
+      solid.add(SEM_VISOR, 0x1d1f22, trs(p.x, 25.2, p.z + 2.6));
+      solid.add(SEM_VISOR, 0x1d1f22, trs(p.x, 19.7, p.z + 2.6));
+      solid.add(SEM_CAP, 0x1d1f22, trs(p.x, 28.2, p.z + 0.8));
+      // two lamps: the lit one bright, the other dark
+      lamps.add(LAMP, sm.isRed ? 0xff2a10 : 0x3a1410, trs(p.x, 24, p.z + 2));
+      lamps.add(LAMP, sm.isRed ? 0x0f2a14 : 0x22ff44, trs(p.x, 18.6, p.z + 2));
     }
     // switches: a disk and a lever pointing along the active branch
     for (let i = 0; i < w.nSwitches; ++i) {
@@ -524,9 +627,12 @@ export class ModernRenderer {
         }
         const p = this.interp.position(c.id, target, heading, simNow, nowMs);
         mesh.position.copy(p.pos);
+        // wheels stand on the rail heads
+        mesh.position.y += 2.6;
         mesh.rotation.y = p.heading;
         // entrance rails are outside the screen: hide carriages there like the original does
         mesh.visible = rail.type !== 6;
+        if ((c.type === 1 || c.type === 2) && mesh.visible) this.puff(c.id, mesh, nowMs);
         // the unmanaged "blinking" train: a black/white strobe
         (mesh.material as THREE.MeshLambertMaterial).color.set(c.dstEntranceIdx === 8 && !blinkOn ? 0x202020 : 0xffffff);
       }
@@ -536,8 +642,27 @@ export class ModernRenderer {
       this.trainGroup.remove(mesh);
       (mesh.material as THREE.Material).dispose();
       this.carriageMeshes.delete(id);
+      this.chimneys.delete(id);
       this.interp.forget(id);
     }
+  }
+
+  /** a puff of steam from a moving steam engine */
+  private puff(id: number, mesh: THREE.Mesh, nowMs: number): void {
+    const h = mesh.rotation.y;
+    const x = mesh.position.x + Math.sin(h) * 12;
+    const z = mesh.position.z + Math.cos(h) * 12;
+    const last = this.chimneys.get(id);
+    if (!last) {
+      this.chimneys.set(id, { x, z, t: nowMs });
+      return;
+    }
+    const moved = Math.hypot(x - last.x, z - last.z);
+    const interval = moved > 0.01 ? 160 : 900;
+    if (nowMs - last.t < interval) return;
+    // idle engines just smoke a little
+    this.smoke.emit(x, mesh.position.y + 21, z, nowMs, false, moved > 0.01 ? 1 : 0.6);
+    this.chimneys.set(id, { x, z, t: nowMs });
   }
 
   // ---- click target ------------------------------------------------------------
@@ -594,13 +719,17 @@ export class ModernRenderer {
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffd060, size: 4, transparent: true }));
     this.fxGroup.add(pts);
-    this.explosions.push({ obj: pts, t0: nowMs, vel });
+    this.explosions.push({ obj: pts, t0: nowMs, vel, origin: { x: p.x, z: p.z } });
+    // a column of dark smoke
+    for (let i = 0; i < 14; ++i)
+      this.smoke.emit(p.x + ((i * 37) % 13) - 6, 4 + i * 1.5, p.z + ((i * 53) % 17) - 8, nowMs + i * 120, true, 1.8, 3200);
   }
 
   private updateFx(nowMs: number): void {
+    // ballistic flight: a function of the time only
     for (let i = this.explosions.length - 1; i >= 0; --i) {
       const e = this.explosions[i];
-      const t = (nowMs - e.t0) / 1000;
+      const t = Math.max(0, (nowMs - e.t0) / 1000);
       if (t > 2.5) {
         this.fxGroup.remove(e.obj);
         disposeTree(e.obj);
@@ -608,14 +737,12 @@ export class ModernRenderer {
         continue;
       }
       const attr = e.obj.geometry.getAttribute('position') as THREE.BufferAttribute;
-      const base = attr.array as Float32Array;
-      const n = base.length / 3;
-      const dt = 1 / 60;
+      const pos = attr.array as Float32Array;
+      const n = pos.length / 3;
       for (let k = 0; k < n; ++k) {
-        e.vel[k * 3 + 1] -= 120 * dt;
-        base[k * 3] += e.vel[k * 3] * dt;
-        base[k * 3 + 1] = Math.max(0, base[k * 3 + 1] + e.vel[k * 3 + 1] * dt);
-        base[k * 3 + 2] += e.vel[k * 3 + 2] * dt;
+        pos[k * 3] = e.origin.x + e.vel[k * 3] * t;
+        pos[k * 3 + 1] = Math.max(0, 6 + e.vel[k * 3 + 1] * t - 60 * t * t);
+        pos[k * 3 + 2] = e.origin.z + e.vel[k * 3 + 2] * t;
       }
       attr.needsUpdate = true;
       (e.obj.material as THREE.PointsMaterial).opacity = 1 - t / 2.5;
@@ -630,6 +757,16 @@ export class ModernRenderer {
       if (o instanceof THREE.Mesh) (o.material as THREE.Material).needsUpdate = true;
     });
   }
+}
+
+/** world point on a map tile where some rail type can be built */
+function buildableAt(x: number, z: number): boolean {
+  const l = logicalFromWorld({ x, y: 0, z });
+  const a = (l.x - 320) / 88;
+  const b = (l.y + 22) / 21;
+  const tx = Math.floor((a + b) / 2);
+  const ty = Math.floor((b - a) / 2);
+  return tx >= 0 && tx < 11 && ty >= 0 && ty < 11 && allowedRailCursorTypes[tx * 11 + ty] !== 0;
 }
 
 function disposeTree(o: THREE.Object3D): void {

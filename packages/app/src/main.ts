@@ -36,7 +36,8 @@ declare global {
       /** stop advancing the simulation with the real time */
       paused: boolean;
       /** advance the virtual time (test mode) and draw a frame */
-      step: (us: number) => void;
+      /** advances the virtual time; `render: false` skips drawing (fast multi-step advances) */
+      step: (us: number, render?: boolean) => void;
       restart: () => void;
       /** the replay of the current session (JSON scenario) */
       exportReplay: () => string;
@@ -142,7 +143,8 @@ async function boot(): Promise<void> {
   });
   field.append(hud.root);
 
-  const onEvent = (e: SimEvent) => modern?.onEvent(e as never, performance.now());
+  // the same presentation clock as draw(): virtual in test mode
+  const onEvent = (e: SimEvent) => modern?.onEvent(e as never, TEST_MODE && game ? game.target / 1000 : performance.now());
 
   const newGame = () => {
     overlay.textContent = '';
@@ -244,11 +246,11 @@ async function boot(): Promise<void> {
     renderer: () => modern,
     stats,
     paused: TEST_MODE,
-    step: (us) => {
+    step: (us, render = true) => {
       if (!game) return;
       game.target += us;
       game.sim.advanceTo(game.target);
-      draw(game.target / 1000);
+      if (render) draw(game.target / 1000);
     },
     restart: newGame,
     exportReplay: () => (game ? game.replay.export(game.sim.now, SIM_VERSION) : ''),
@@ -278,9 +280,20 @@ async function boot(): Promise<void> {
   );
 
   let last = performance.now();
+  // a weak or software GPU: when 3D frames stay slow, drop the small decorations
+  // (grass, flowers) once, so the game keeps its real-time pace
+  let slowFrames = 0;
   const frame = (nowMs: number) => {
-    const dt = Math.min((nowMs - last) * 1000, MAX_STEP_US);
+    const interval = nowMs - last;
+    const dt = Math.min(interval * 1000, MAX_STEP_US);
     last = nowMs;
+    if (!TEST_MODE && modern && modern.detail > 0 && gl.style.visibility === 'visible' && !document.hidden) {
+      slowFrames = interval > 45 ? slowFrames + 1 : Math.max(0, slowFrames - 2);
+      if (slowFrames > 20) {
+        modern.detail = 0;
+        console.info('Паровозики: slow frames, the small decorations are off');
+      }
+    }
     if (game && !document.hidden && !window.__parovozyky!.paused) {
       game.target += dt;
       game.sim.advanceTo(game.target);
