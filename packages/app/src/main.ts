@@ -11,6 +11,7 @@ import { BrowserFileStore } from './files';
 import { Hud } from './hud';
 import { attachInput, ME_LEFTPRESSED, ME_LEFTRELEASED, ME_RIGHTPRESSED, ME_RIGHTRELEASED } from './input';
 import { ClassicScreen } from './screen';
+import { ReplayRecorder } from './replay';
 import { Settings, loadSettings, saveSettings, type ViewMode } from './settings';
 
 const MAX_STEP_US = 100_000;
@@ -19,6 +20,7 @@ interface Game {
   sim: Sim;
   files: BrowserFileStore;
   target: number;
+  replay: ReplayRecorder;
 }
 
 declare global {
@@ -36,6 +38,8 @@ declare global {
       /** advance the virtual time (test mode) and draw a frame */
       step: (us: number) => void;
       restart: () => void;
+      /** the replay of the current session (JSON scenario) */
+      exportReplay: () => string;
     };
   }
 }
@@ -93,11 +97,15 @@ async function boot(): Promise<void> {
   const now = () => (game ? Math.max(game.target, game.sim.now) : 0);
   const sendMouse = (flags: number, buttons: number, x: number, y: number) => {
     if (!game || game.sim.halted) return;
-    game.sim.pushInput({ t: now(), type: 'mouse', flags, buttons, x, y });
+    const t = now();
+    game.replay.mouse(t, flags, buttons, x, y);
+    game.sim.pushInput({ t, type: 'mouse', flags, buttons, x, y });
   };
   const sendKey = (scancode: number, down: boolean) => {
     if (!game || game.sim.halted) return;
-    game.sim.pushInput({ t: now(), type: 'key', scancode, down });
+    const t = now();
+    game.replay.key(t, scancode, down);
+    game.sim.pushInput({ t, type: 'key', scancode, down });
   };
 
   const hud = new Hud({
@@ -129,6 +137,7 @@ async function boot(): Promise<void> {
     game = {
       files,
       target: 0,
+      replay: new ReplayRecorder(seed, settings.playerName, files, files.userFiles()),
       sim: createSim({
         seed,
         files,
@@ -151,6 +160,15 @@ async function boot(): Promise<void> {
       // the player name is a command line argument of the original game:
       // it takes effect when the game starts again
       if (what === 'playerName') newGame();
+    },
+    exportReplay: () => {
+      if (!game) return;
+      const json = game.replay.export(game.sim.now, SIM_VERSION);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      a.download = `shortline-${JSON.parse(json).name}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     },
     fullscreen: () => {
       if (document.fullscreenElement) void document.exitFullscreen();
@@ -215,6 +233,7 @@ async function boot(): Promise<void> {
       draw(game.target / 1000);
     },
     restart: newGame,
+    exportReplay: () => (game ? game.replay.export(game.sim.now, SIM_VERSION) : ''),
   };
 
   window.addEventListener('keydown', (e) => {

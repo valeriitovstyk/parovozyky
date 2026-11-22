@@ -6,6 +6,7 @@
 //   { from: "<name>", dir: "extra" }               copy of reference/reSL/resources/extra/<name>
 //   { from: "<name>", patch: [{ offset, u16 }] }   copy with little-endian 16-bit patches
 //   { records: [{ name, level }] }                 results.tbl with the given start levels
+//   { base64: "..." }                             the file content (replays exported by the app)
 //
 // Standard game resources (play.7, GAMEOVER.7, captions.7, poster.7, RULES.TXT)
 // are always present; demo files only when listed (so a scenario can pick one).
@@ -45,6 +46,10 @@ export function buildFiles(spec, resourcesDir) {
   const files = new Map();
   for (const name of STANDARD_FILES) files.set(name, new Uint8Array(readFileSync(join(resourcesDir, name))));
   for (const [name, fs] of Object.entries(spec.files ?? {})) {
+    if (fs.base64 !== undefined) {
+      files.set(name, new Uint8Array(Buffer.from(fs.base64, 'base64')));
+      continue;
+    }
     if (fs.records) {
       files.set(name, makeRecords(fs.records));
       continue;

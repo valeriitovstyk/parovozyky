@@ -21,7 +21,10 @@
     "test:screens": "vitest run --project oracle",
     "e2e": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project smoke",
     "perf": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project perf --reporter=list",
-    "screens": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project screens --workers=1"
+    "screens": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project screens --workers=1",
+    "replay": "sh -c 'REPLAY=\"$0\" vitest run --project oracle tests/oracle/replay.test.ts'",
+    "e2e:dist": "pnpm build && E2E_DIST=1 PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project smoke",
+    "test:all": "pnpm check && pnpm test:golden && pnpm test:screens && pnpm e2e && pnpm screens && pnpm perf"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

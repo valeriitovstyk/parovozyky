@@ -41,7 +41,7 @@ export class Settings {
 
   constructor(
     private readonly s: SettingsData,
-    private readonly cb: { changed: (what: keyof SettingsData) => void; fullscreen: () => void },
+    private readonly cb: { changed: (what: keyof SettingsData) => void; fullscreen: () => void; exportReplay: () => void },
   ) {
     this.root.className = 'toolbar';
     const gear = this.button('⚙', 'Settings');
@@ -114,6 +114,10 @@ export class Settings {
       this.cb.changed('view');
     };
     row('View', view);
+    const replay = document.createElement('button');
+    replay.textContent = 'Export replay (for a bug report)';
+    replay.onclick = () => this.cb.exportReplay();
+    panel.append(replay);
     const help = document.createElement('p');
     help.className = 'help';
     help.textContent =

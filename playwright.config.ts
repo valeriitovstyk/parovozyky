@@ -6,12 +6,11 @@ export default defineConfig({
   expect: { timeout: 30_000, toHaveScreenshot: { maxDiffPixels: 0 } },
   snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}-{testName}{ext}',
   fullyParallel: true,
-  webServer: {
-    command: 'pnpm dev --port 5180 --strictPort',
-    port: 5180,
-    reuseExistingServer: true,
-  },
-  use: { baseURL: 'http://localhost:5180', viewport: { width: 1024, height: 768 } },
+  // E2E_DIST=1: test the production build (pnpm build) served by `vite preview`
+  webServer: process.env.E2E_DIST
+    ? { command: 'pnpm --filter @shortline/app preview --port 5181 --strictPort', port: 5181, reuseExistingServer: false }
+    : { command: 'pnpm dev --port 5180 --strictPort', port: 5180, reuseExistingServer: true },
+  use: { baseURL: process.env.E2E_DIST ? 'http://localhost:5181' : 'http://localhost:5180', viewport: { width: 1024, height: 768 } },
   projects: [
     { name: 'smoke', testIgnore: /(perf|screens)\.spec/ },
     // software WebGL: run one at a time (pnpm screens)
