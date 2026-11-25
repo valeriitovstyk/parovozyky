@@ -246,6 +246,28 @@ export class ModernRenderer {
     this.nature.detail = v;
   }
 
+  /** for tests: what the last frame contains */
+  inspect(): { carriages: number; visibleCarriages: number; badTransforms: number; geometries: number; textures: number; drawCalls: number; glError: number } {
+    let bad = 0;
+    const check = (o: THREE.Object3D) => {
+      const p = o.position;
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z) || !Number.isFinite(o.rotation.y)) ++bad;
+    };
+    for (const g of [this.trainGroup, this.fxGroup, this.signalGroup, this.animals.group]) g.traverse(check);
+    let visible = 0;
+    for (const m of this.carriageMeshes.values()) if (m.visible) ++visible;
+    const info = this.renderer.info;
+    return {
+      carriages: this.carriageMeshes.size,
+      visibleCarriages: visible,
+      badTransforms: bad,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      drawCalls: info.render.calls,
+      glError: this.renderer.getContext().getError(),
+    };
+  }
+
   render(sim: Sim, nowMs: number): void {
     const w = sim.world;
     this.updateRails(w);

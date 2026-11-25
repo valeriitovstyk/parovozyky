@@ -12,9 +12,11 @@ export default defineConfig({
     : { command: 'pnpm dev --port 5180 --strictPort', port: 5180, reuseExistingServer: true },
   use: { baseURL: process.env.E2E_DIST ? 'http://localhost:5181' : 'http://localhost:5180', viewport: { width: 1024, height: 768 } },
   projects: [
-    { name: 'smoke', testIgnore: /(perf|screens)\.spec/ },
+    { name: 'smoke', testIgnore: /(perf|screens|level)\.spec/ },
     // software WebGL: run one at a time (pnpm screens)
     { name: 'screens', testMatch: /screens\.spec/ },
+    // a whole level in 3D, ~10 minutes (pnpm level; LEVEL_DEMO=demo_x picks the network)
+    { name: 'level', testMatch: /level\.spec/ },
     {
       name: 'perf',
       testMatch: /perf\.spec/,

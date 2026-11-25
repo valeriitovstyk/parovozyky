@@ -4,7 +4,7 @@ import type { Blocking, TaskGen } from '../core/scheduler';
 import { taskDemoAI, stopDemo } from './demo';
 import { drawWorld } from './drawing';
 import { spawnNewEntrance } from './entrance';
-import { G } from './globals';
+import { G, ub } from './globals';
 import { startHeaderFieldAnimation } from './header';
 import { createNewWorld, resetTasks } from './init';
 import { playHappy2000YearMelody } from './melody';
@@ -239,7 +239,15 @@ export function* taskGameMainLoop(): TaskGen {
           buildHouses(G.headers[HeaderFieldId.Year].value + 1);
           scheduleAllTrainsRedrawing();
 
-          switch (G.headers[HeaderFieldId.Year].value) {
+          // docs/fidelity.md U3: the year field is animated, a busy header
+          // animation queue lets the year pass 2000 unnoticed (and then no
+          // locomotive is available: generateTrain never ends)
+          let year = G.headers[HeaderFieldId.Year].value;
+          if (year > 2000) {
+            if (G.ubPolicy !== 'recover') ub('the year passed 2000');
+            year = 2000;
+          }
+          switch (year) {
             case 1800:
               if (G.entranceCount === 1) yield* spawnNewEntrance(entranceRail(G.entrances[1].entranceRailInfoIdx));
               break;

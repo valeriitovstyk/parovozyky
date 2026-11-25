@@ -368,7 +368,11 @@ export class Nature {
       const big = !buildable(x, z) && r() < 0.35;
       const k = big ? 1.6 + r() * 2.2 : 0.4 + r() * 0.8;
       q.setFromEuler(e.set(r() * 3, r() * 3, r() * 3));
-      m.compose(p.set(x, 0.5 * k, z), q, s.set(k * (1 + r() * 0.8), k * (0.5 + r() * 0.3), k));
+      s.set(k * (1 + r() * 0.8), k * (0.5 + r() * 0.3), k);
+      // the whole stone stays clear of houses and tracks, not just its centre
+      const ext = 2.4 * Math.max(s.x, s.z);
+      if (![[ext, 0], [-ext, 0], [0, ext], [0, -ext]].every(([dx, dz]) => blockers.free(x + dx, z + dz))) continue;
+      m.compose(p.set(x, 0.5 * k, z), q, s);
       stones.setMatrixAt(n, m);
       stones.setColorAt(n, c.setHSL(0.08 + r() * 0.05, 0.06 + r() * 0.06, 0.42 + r() * 0.25));
       ++n;
