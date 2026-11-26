@@ -230,6 +230,9 @@ function isTrainAvailableInCurrentYear(type: CarriageType): boolean {
 
 /* 1a65:043a */
 function generateTrain(t: Train, entranceIdx: number): void {
+  // docs/fidelity.md U3: the animated year field may pass 2000 before the main
+  // loop notices; there is no locomotive after 2000 and the loop below never ends
+  if (G.headers[HeaderFieldId.Year].value > 2000) ub('the year passed 2000');
   const rng = G.rng;
   t.carriageCnt = u8(rng.genRandomNumber(5) + 1);
   do {

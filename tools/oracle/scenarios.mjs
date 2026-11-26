@@ -1,5 +1,8 @@
 // Golden scenario definitions (deterministic: the same list every run).
 
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DEMO_FILES } from '../scenario/files.mjs';
 
 // DOS scan codes (system/keyboard.h)
@@ -194,6 +197,15 @@ export function archiveScenario() {
   };
 }
 
+// Sessions kept from the fuzzer (tests/fuzz): tools/oracle/pinned/*.json
+export function pinnedScenarios() {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), 'pinned');
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.json'))
+    .sort()
+    .map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')));
+}
+
 export function allScenarios() {
-  return [...demoScenarios(), ...botScenarios(), year2000Scenario(), archiveScenario()];
+  return [...demoScenarios(), ...botScenarios(), year2000Scenario(), archiveScenario(), ...pinnedScenarios()];
 }

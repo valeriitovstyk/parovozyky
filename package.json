@@ -20,6 +20,7 @@
     "oracle:golden": "node tools/oracle/golden.mjs",
     "extract": "bash tools/extract/extract.sh",
     "test:golden": "vitest run --project golden",
+    "fuzz": "vitest run --project fuzz",
     "test:screens": "vitest run --project oracle",
     "e2e": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project smoke",
     "perf": "PLAYWRIGHT_BROWSERS_PATH=.tools/ms-playwright playwright test --project perf --reporter=list",

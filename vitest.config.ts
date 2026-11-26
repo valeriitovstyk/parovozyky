@@ -26,6 +26,14 @@ export default defineConfig({
           testTimeout: 600_000,
         },
       },
+      {
+        test: {
+          name: 'fuzz',
+          include: ['tests/fuzz/**/*.test.ts'],
+          environment: 'node',
+          testTimeout: 1_200_000,
+        },
+      },
     ],
   },
 });

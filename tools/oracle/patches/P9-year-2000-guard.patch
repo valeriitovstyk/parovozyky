@@ -1,0 +1,47 @@
+diff --git a/src/game/main_loop.cpp b/src/game/main_loop.cpp
+index 5e8f594..98a5f71 100644
+--- a/src/game/main_loop.cpp
++++ b/src/game/main_loop.cpp
+@@ -1,5 +1,7 @@
+ #include "main_loop.h"
+ 
++#include <system/driver/headless/oracle.h>
++
+ #include "demo.h"
+ #include "drawing.h"
+ #include "entrance.h"
+@@ -327,6 +329,12 @@ Task taskGameMainLoop()
+                 buildHouses(g_headers[static_cast<int>(HeaderFieldId::Year)].value + 1);
+                 scheduleAllTrainsRedrawing();
+ 
++                // Oracle (P9): the animated year field can pass 2000 unnoticed;
++                // then no locomotive is available and generateTrain never ends
++                // (docs/fidelity.md U3)
++                if (g_headers[static_cast<int>(HeaderFieldId::Year)].value > 2000) [[unlikely]]
++                    oracle::undefinedBehavior("the year passed 2000");
++
+                 switch (g_headers[static_cast<int>(HeaderFieldId::Year)].value) {
+                 case 1800:
+                     if (g_entranceCount == 1)
+diff --git a/src/game/train.cpp b/src/game/train.cpp
+index e6da884..fac310c 100644
+--- a/src/game/train.cpp
++++ b/src/game/train.cpp
+@@ -1,5 +1,7 @@
+ #include "train.h"
+ 
++#include <system/driver/headless/oracle.h>
++
+ #include "entrance.h"
+ #include "header.h"
+ #include "header_field.h"
+@@ -275,6 +277,9 @@ static bool isTrainAvailableInCurrentYear(CarriageType type)
+ /* 1a65:043a */
+ static void generateTrain(Train& t, std::int16_t entranceIdx)
+ {
++    // Oracle (P9): no locomotive after 2000, the loop below would never end (U3)
++    if (g_headers[static_cast<int>(HeaderFieldId::Year)].value > 2000) [[unlikely]]
++        oracle::undefinedBehavior("the year passed 2000");
+     t.carriageCnt = genRandomNumber(5) + 1;
+     do {
+         std::int16_t rnd = genRandomNumber(6);

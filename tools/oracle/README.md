@@ -16,6 +16,10 @@ pnpm oracle:golden    # tests/golden/{scenarios,traces}; --only <regex>, --check
 - `P5` trace hooks: task ids, state hash after every task resumption, status messages, sounds.
 - `P6` deterministic file search (sorted names, fixed date).
 - `P7` undefined-behaviour guards (U1) and the zero-extended entrance path (U2).
+- `P8` stable sort.
+- `P9` the year passing 2000 stops with UB instead of hanging (U3).
 
 Patches are applied with `git apply` to a fresh copy of `reference/reSL/src` in `.build/oracle/tree`.
+Pinned scenarios (`tools/oracle/pinned/*.json`, e.g. sessions found by `pnpm fuzz`) become golden scenarios too.
+
 Trace format and the canonical state: `docs/trace-format.md`. Deviations from reSL: `docs/fidelity.md`.
