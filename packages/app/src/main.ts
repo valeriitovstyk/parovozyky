@@ -14,6 +14,7 @@ import { PosterView } from './poster';
 import { ClassicScreen } from './screen';
 import { ReplayRecorder } from './replay';
 import { Settings, loadSettings, saveSettings, type ViewMode } from './settings';
+import { exportZip, importFiles } from './transfer';
 
 const MAX_STEP_US = 100_000;
 
@@ -191,12 +192,43 @@ async function boot(): Promise<void> {
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     },
+    importFiles: (list) => importPlayerFiles(list),
+    exportSaves: () => {
+      const names = files.userFiles();
+      if (!names.length) return 0;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([exportZip(files, names).slice()], { type: 'application/zip' }));
+      a.download = 'parovozyky-saves.zip';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      return names.length;
+    },
     fullscreen: () => {
       if (document.fullscreenElement) void document.exitFullscreen();
       else void root.requestFullscreen?.();
     },
   });
   root.append(toolbar.root);
+
+  // saved games and records from the computer (the original game, the reSL
+  // web version, another browser): the settings panel or a drop on the page
+  async function importPlayerFiles(list: File[]) {
+    const read = await Promise.all(list.map(async (f) => [f.name, new Uint8Array(await f.arrayBuffer())] as [string, Uint8Array]));
+    const report = await importFiles(files, read);
+    // the start level is read when the main menu is drawn: not in the middle of a game
+    const sc = game?.sim.world.video.screen;
+    if (report.records && sc !== 'game') newGame();
+    return report;
+  }
+  window.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+  });
+  window.addEventListener('drop', (e) => {
+    const list = Array.from(e.dataTransfer?.files ?? []);
+    if (!list.length) return;
+    e.preventDefault();
+    void importPlayerFiles(list).then((r) => toolbar.showReport(toolbar.open(), r));
+  });
   for (const t of ['pointerdown', 'pointerup', 'pointermove'])
     for (const e of [toolbar.root, overlay]) e.addEventListener(t, (ev) => ev.stopPropagation());
 
