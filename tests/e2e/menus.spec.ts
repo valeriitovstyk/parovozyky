@@ -160,4 +160,8 @@ test('Go: the mode button shows and switches the mouse mode', async ({ page }) =
   await key(page, 'Space');
   await advanceUntil(page, (p) => p.mode === 2, 2);
   await expect(button).toHaveAttribute('data-mode', 'construction');
+  // and the middle mouse button
+  await page.locator('#app').click({ button: 'middle', position: { x: 300, y: 300 } });
+  await advanceUntil(page, (p) => p.mode === 1, 2);
+  await expect(button).toHaveAttribute('data-mode', 'management');
 });

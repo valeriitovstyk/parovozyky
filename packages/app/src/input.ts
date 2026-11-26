@@ -72,6 +72,12 @@ export function attachInput(canvas: HTMLElement, sink: InputSink, toLogical: ToL
       return;
     }
     e.preventDefault();
+    if (e.button === 1) {
+      // the middle button switches the mouse mode, like <space>
+      sink.key(SCANCODES.Space, true);
+      sink.key(SCANCODES.Space, false);
+      return;
+    }
     if ('setPointerCapture' in canvas) canvas.setPointerCapture(e.pointerId);
     const [x, y] = pos(e);
     if (e.button === 0) {
@@ -110,12 +116,17 @@ export function attachInput(canvas: HTMLElement, sink: InputSink, toLogical: ToL
     sink.key(sc, down);
   };
   const noMenu = (e: Event) => e.preventDefault();
+  // no autoscroll on the middle button (it switches the mouse mode)
+  const noAutoscroll = (e: MouseEvent) => {
+    if (e.button === 1) e.preventDefault();
+  };
   const kd = onKey(true);
   const ku = onKey(false);
   canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerdown', onDown);
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('contextmenu', noMenu);
+  canvas.addEventListener('mousedown', noAutoscroll);
   window.addEventListener('keydown', kd);
   window.addEventListener('keyup', ku);
   return () => {
@@ -123,6 +134,7 @@ export function attachInput(canvas: HTMLElement, sink: InputSink, toLogical: ToL
     canvas.removeEventListener('pointerdown', onDown);
     canvas.removeEventListener('pointerup', onUp);
     canvas.removeEventListener('contextmenu', noMenu);
+    canvas.removeEventListener('mousedown', noAutoscroll);
     window.removeEventListener('keydown', kd);
     window.removeEventListener('keyup', ku);
   };
