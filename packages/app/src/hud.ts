@@ -32,6 +32,9 @@ export class Hud {
   private readonly modal = el('div', 'hud-modal');
   private readonly digits: HTMLElement[][] = [];
   private readonly dispatchers = el('div', 'hud-dispatchers');
+  /** the mouse mode (construction / management); a click = <space> */
+  private readonly modeButton = el('button', 'hud-mode');
+  private modeKey = '';
   private dispatchersKey = '';
   private modalKey = '';
   private statusKey = '\u0000';
@@ -62,6 +65,9 @@ export class Hud {
     const ent = el('div', 'hud-field');
     ent.append(el('span', 'hud-label', 'Entrances'), this.dispatchers);
     this.header.append(ent);
+    this.modeButton.hidden = true;
+    this.modeButton.onclick = () => this.actions.key(SCANCODES.Space);
+    this.header.append(this.modeButton);
     const menu = el('button', 'hud-menu', '☰');
     menu.title = 'Pause';
     // MenuButton (600, 13) 24x21
@@ -91,6 +97,19 @@ export class Hud {
         cells[i].style.transform = `translateY(${-(d + 1 + scroll) * (100 / 12)}%)`;
       }
     });
+
+    // the mouse mode: a new game starts in construction (main_menu.cpp)
+    const mk = screen !== 'game' || w.isDemoMode ? '' : w.mode === w.modeConstruction ? 'construction' : 'management';
+    if (mk !== this.modeKey) {
+      this.modeKey = mk;
+      this.modeButton.hidden = !mk;
+      this.modeButton.dataset.mode = mk;
+      this.modeButton.textContent = mk === 'construction' ? '⚒ Будівництво' : '⇄ Стрілки';
+      this.modeButton.title =
+        mk === 'construction'
+          ? 'Режим будівництва: лівий клік — тип колії, правий — будувати. Натисніть (або пробіл), щоб керувати стрілками'
+          : 'Режим керування: клік — стрілка чи семафор, правий клік біля в\'їзду — дрезина. Натисніть (або пробіл), щоб будувати';
+    }
 
     // dispatchers: one per entrance, with a flag when trains are waiting
     const dk = Array.from({ length: w.entranceCount }, (_, i) => `${w.entrances[i].bgColor}:${w.entrances[i].waitingTrainsCount ? 1 : 0}`).join(',');

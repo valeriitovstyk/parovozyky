@@ -142,3 +142,22 @@ test('Player name: the start level comes from the records', async ({ page }) => 
   });
   expect(name).toBe('Tester');
 });
+
+test('Go: the mode button shows and switches the mouse mode', async ({ page }) => {
+  await start(page);
+  const button = page.locator('.hud-mode');
+  await expect(button).toBeHidden();
+  await choose(page, 'Go!');
+  // a new game starts in construction (main_menu.cpp)
+  await advanceUntil(page, (p) => p.screen === 'game' && p.mode === 2);
+  await expect(button).toHaveAttribute('data-mode', 'construction');
+  // the main loop starts after the screen shift and drops the keys pressed before it
+  await advance(page, 3);
+  await button.click();
+  await advanceUntil(page, (p) => p.mode === 1, 2);
+  await expect(button).toHaveAttribute('data-mode', 'management');
+  // the keyboard switches it as well
+  await key(page, 'Space');
+  await advanceUntil(page, (p) => p.mode === 2, 2);
+  await expect(button).toHaveAttribute('data-mode', 'construction');
+});

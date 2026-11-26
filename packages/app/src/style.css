@@ -161,6 +161,30 @@ body {
   color: #f3e2b5;
   cursor: pointer;
 }
+.hud-mode {
+  margin-left: auto;
+  pointer-events: auto;
+  font-size: calc(9px * var(--u));
+  height: calc(28px * var(--u));
+  padding: 0 calc(8px * var(--u));
+  margin-right: calc(6px * var(--u));
+  border-radius: calc(5px * var(--u));
+  border: calc(1px * var(--u)) solid #c9a456;
+  background: #4a3825;
+  color: #f3e2b5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hud-mode[data-mode='construction'] {
+  background: #7a4a1c;
+  border-color: #f0b85a;
+}
+.hud-mode[hidden] {
+  display: none;
+}
+.hud-mode:not([hidden]) + .hud-menu {
+  margin-left: 0;
+}
 .hud-status {
   position: absolute;
   left: 0;
